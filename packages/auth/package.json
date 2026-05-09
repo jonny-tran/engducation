@@ -1,0 +1,24 @@
+{
+  "name": "@engducation/auth",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./src/index.ts"
+    },
+    "./*": {
+      "default": "./src/*.ts"
+    }
+  },
+  "scripts": {},
+  "dependencies": {
+    "@engducation/db": "workspace:*",
+    "@engducation/env": "workspace:*",
+    "better-auth": "catalog:",
+    "dotenv": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@engducation/config": "workspace:*",
+    "typescript": "catalog:"
+  }
+}
