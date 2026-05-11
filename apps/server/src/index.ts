@@ -2,6 +2,7 @@ import { cors } from "@elysiajs/cors";
 import { node } from "@elysiajs/node";
 import { createContext } from "@engducation/api/context";
 import { appRouter } from "@engducation/api/routers/index";
+import { responsePlugin } from "@engducation/api";
 import { auth } from "@engducation/auth";
 import { env } from "@engducation/env/server";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
@@ -16,6 +17,7 @@ new Elysia({ adapter: node() })
       credentials: true,
     }),
   )
+  .use(responsePlugin())
   .all("/api/auth/*", async (context) => {
     const { request, status } = context;
     if (["POST", "GET"].includes(request.method)) {

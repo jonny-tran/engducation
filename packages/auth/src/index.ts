@@ -1,6 +1,7 @@
 import { createDb } from "@engducation/db";
 import * as schema from "@engducation/db/schema/auth";
 import { env } from "@engducation/env/server";
+import { admin } from "better-auth/plugins";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 
@@ -26,7 +27,12 @@ export function createAuth() {
         httpOnly: true,
       },
     },
-    plugins: [],
+    plugins: [
+      admin({
+        defaultRole: "user",
+        adminRoles: ["admin"],
+      }),
+    ],
   });
 }
 

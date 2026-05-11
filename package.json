@@ -15,7 +15,10 @@
     "db:push": "turbo -F @engducation/db db:push",
     "db:studio": "turbo -F @engducation/db db:studio",
     "db:generate": "turbo -F @engducation/db db:generate",
-    "db:migrate": "turbo -F @engducation/db db:migrate"
+    "db:migrate": "turbo -F @engducation/db db:migrate",
+    "db:full-reset": "turbo -F @engducation/db db:reset && turbo -F @engducation/db db:push && turbo -F @engducation/db db:seed",
+    "db:reset": "turbo -F @engducation/db db:reset",
+    "db:seed": "turbo -F @engducation/db db:seed"
   },
   "dependencies": {
     "@engducation/env": "workspace:*",

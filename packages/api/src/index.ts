@@ -1,6 +1,10 @@
 import { initTRPC, TRPCError } from "@trpc/server";
 
 import type { Context } from "./context";
+import { responsePlugin } from "./plugins/response";
+
+export { responsePlugin };
+export type { ApiResponse } from "./utils/response-handler";
 
 export const t = initTRPC.context<Context>().create();
 
@@ -12,8 +16,7 @@ export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
   if (!ctx.session) {
     throw new TRPCError({
       code: "UNAUTHORIZED",
-      message: "Authentication required",
-      cause: "No session",
+      message: "Vui lòng đăng nhập để tiếp tục",
     });
   }
   return next({

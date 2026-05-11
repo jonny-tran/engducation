@@ -6,6 +6,9 @@ settings:
 
 catalogs:
   default:
+    '@better-auth/utils':
+      specifier: 0.4.0
+      version: 0.4.0
     '@trpc/client':
       specifier: ^11.16.0
       version: 11.17.0
@@ -285,6 +288,9 @@ importers:
 
   packages/db:
     dependencies:
+      '@better-auth/utils':
+        specifier: 'catalog:'
+        version: 0.4.0
       '@engducation/env':
         specifier: workspace:*
         version: link:../env
@@ -307,6 +313,9 @@ importers:
       drizzle-kit:
         specifier: ^0.31.8
         version: 0.31.10
+      tsx:
+        specifier: ^4.21.0
+        version: 4.21.0
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
