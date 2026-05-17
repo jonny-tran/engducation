@@ -1,6 +1,6 @@
 import { protectedProcedure, publicProcedure, router } from "../index";
-import { adminContentRouter } from "./admin";
-import { userContentRouter } from "./user";
+import { adminContentRouter, adminVocabularyRouter } from "./admin";
+import { userContentRouter, userVocabularyRouter } from "./user";
 
 export const appRouter = router({
   healthCheck: publicProcedure.query(() => {
@@ -14,6 +14,8 @@ export const appRouter = router({
   }),
   admin: adminContentRouter,
   user: userContentRouter,
+  adminVocabulary: adminVocabularyRouter,
+  userVocabulary: userVocabularyRouter,
 });
 
 export type AppRouter = typeof appRouter;
