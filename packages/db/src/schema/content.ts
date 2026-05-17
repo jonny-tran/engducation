@@ -12,20 +12,14 @@ import {
 } from "drizzle-orm/pg-core";
 
 import { user } from "./auth";
+import { courseLevelEnum } from "./auth";
 
 // ==========================================
 // 1. ENUMS
 // ==========================================
 
-/** CEFR language proficiency levels */
-export const courseLevelEnum = pgEnum("course_level", [
-  "A1",
-  "A2",
-  "B1",
-  "B2",
-  "C1",
-  "C2",
-]);
+/** CEFR language proficiency levels — re-exported from auth for convenience */
+export { courseLevelEnum } from "./auth";
 
 /** Admin content lifecycle status */
 export const contentStatusEnum = pgEnum("content_status", [
@@ -230,5 +224,96 @@ export const quizAttemptsRelations = relations(quizAttempts, ({ one }) => ({
   quiz: one(quizzes, {
     fields: [quizAttempts.quizId],
     references: [quizzes.id],
+  }),
+}));
+
+// ==========================================
+// 5. VOCABULARY HUB  (Admin CMS + User Interaction)
+// ==========================================
+
+/** Từ loại tiếng Anh */
+export const partOfSpeechEnum = pgEnum("part_of_speech", [
+  "noun",
+  "verb",
+  "adjective",
+  "adverb",
+  "preposition",
+  "conjunction",
+  "idiom",
+  "phrasal_verb",
+]);
+
+/**
+ * Bảng tĩnh chứa kho từ vựng do Admin tạo/quản lý.
+ * Mỗi bản ghi là một từ cụ thể ở một từ loại xác định.
+ */
+export const vocabularies = pgTable(
+  "vocabularies",
+  {
+    id: text("id").primaryKey(),
+    word: text("word").notNull(),
+    ipa: text("ipa").notNull(),
+    partOfSpeech: partOfSpeechEnum("part_of_speech").notNull(),
+    meaningVi: text("meaning_vi").notNull(),
+    exampleEn: text("example_en").notNull(),
+    exampleVi: text("example_vi").notNull(),
+    audioUrl: text("audio_url"),
+    level: courseLevelEnum("level").notNull(),
+    topic: text("topic").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    /**
+     * Cho phép cùng một từ tồn tại ở nhiều từ loại khác nhau
+     * (ví dụ: "run" là noun khi là danh từ, là verb khi là động từ).
+     */
+    uniqueIndex("vocabularies_word_part_of_speech_idx").on(
+      table.word,
+      table.partOfSpeech,
+    ),
+  ],
+);
+
+/**
+ * Bảng trung gian lưu trữ từ vựng mà người dùng đã bookmark.
+ * Composite primary key đảm bảo mỗi user chỉ bookmark một từ tối đa một lần.
+ */
+export const userBookmarks = pgTable(
+  "user_bookmarks",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    vocabularyId: text("vocabulary_id")
+      .notNull()
+      .references(() => vocabularies.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.vocabularyId] })],
+);
+
+// ==========================================
+// 5a. VOCABULARY HUB — RELATIONS
+// ==========================================
+
+export const vocabulariesRelations = relations(vocabularies, ({ many }) => ({
+  bookmarks: many(userBookmarks),
+}));
+
+export const userBookmarksRelations = relations(userBookmarks, ({ one }) => ({
+  user: one(user, {
+    fields: [userBookmarks.userId],
+    references: [user.id],
+  }),
+  vocabulary: one(vocabularies, {
+    fields: [userBookmarks.vocabularyId],
+    references: [vocabularies.id],
   }),
 }));
