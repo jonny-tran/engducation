@@ -3,10 +3,24 @@
   "type": "module",
   "exports": {
     ".": {
+      "types": "./src/index.ts",
       "default": "./src/index.ts"
     },
-    "./*": {
-      "default": "./src/*.ts"
+    "./schema": {
+      "types": "./src/schema.ts",
+      "default": "./src/schema.ts"
+    },
+    "./schema/auth": {
+      "types": "./src/schema/auth.ts",
+      "default": "./src/schema/auth.ts"
+    },
+    "./schema/content": {
+      "types": "./src/schema/content.ts",
+      "default": "./src/schema/content.ts"
+    },
+    "./schema/index": {
+      "types": "./src/schema/index.ts",
+      "default": "./src/schema/index.ts"
     }
   },
   "scripts": {

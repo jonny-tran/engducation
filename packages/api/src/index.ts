@@ -26,3 +26,13 @@ export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
     },
   });
 });
+
+export const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
+  if (ctx.session.user.role !== "admin") {
+    throw new TRPCError({
+      code: "UNAUTHORIZED",
+      message: "Bạn không có quyền quản trị viên",
+    });
+  }
+  return next({ ctx });
+});

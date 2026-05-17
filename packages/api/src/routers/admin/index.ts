@@ -1,0 +1,1 @@
+export { adminContentRouter } from "./content";
