@@ -66,9 +66,9 @@ export function AdminCourseForm({ editingCourse, onFinished }: AdminCourseFormPr
   };
 
   return (
-    <Card className="border border-slate-300 dark:border-slate-800 rounded-none bg-slate-50/50 dark:bg-slate-900/50">
-      <CardHeader className="py-3 border-b border-slate-200 dark:border-slate-800">
-        <CardTitle className="text-sm font-bold uppercase tracking-wider">
+    <Card className="border border-border bg-card shadow-sm">
+      <CardHeader className="py-3 border-b border-border bg-muted/20">
+        <CardTitle className="text-sm font-bold uppercase tracking-wider text-foreground">
           {editingCourse ? "Chỉnh sửa khóa học" : "Tạo khóa học mới"}
         </CardTitle>
       </CardHeader>
@@ -76,44 +76,42 @@ export function AdminCourseForm({ editingCourse, onFinished }: AdminCourseFormPr
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-bold uppercase text-slate-500">Tiêu đề khóa học *</label>
+              <label className="text-xs font-bold uppercase text-muted-foreground">Tiêu đề khóa học *</label>
               <Input
                 required
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Nhập tiêu đề khóa học..."
-                className="rounded-none border-slate-300 dark:border-slate-800 focus-visible:ring-0 focus-visible:border-slate-500"
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-bold uppercase text-slate-500">Ảnh đại diện (URL)</label>
+              <label className="text-xs font-bold uppercase text-muted-foreground">Ảnh đại diện (URL)</label>
               <Input
                 type="url"
                 value={thumbnailUrl}
                 onChange={(e) => setThumbnailUrl(e.target.value)}
                 placeholder="https://example.com/image.png"
-                className="rounded-none border-slate-300 dark:border-slate-800 focus-visible:ring-0 focus-visible:border-slate-500"
               />
             </div>
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-bold uppercase text-slate-500">Mô tả khóa học</label>
+            <label className="text-xs font-bold uppercase text-muted-foreground">Mô tả khóa học</label>
             <Textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Nhập mô tả chi tiết cho khóa học..."
-              className="rounded-none border-slate-300 dark:border-slate-800 focus-visible:ring-0 focus-visible:border-slate-500 min-h-[80px]"
+              className="min-h-[80px]"
             />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-bold uppercase text-slate-500">Trình độ (Level)</label>
+              <label className="text-xs font-bold uppercase text-muted-foreground">Trình độ (Level)</label>
               <select
                 value={level}
                 onChange={(e) => setLevel(e.target.value as any)}
-                className="flex h-9 w-full border border-slate-300 dark:border-slate-800 bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus:outline-none focus:ring-0 rounded-none dark:bg-slate-950"
+                className="flex h-8 w-full border border-input bg-background px-2.5 py-1 text-xs text-foreground shadow-sm transition-colors outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50 disabled:opacity-50 dark:bg-input/30"
               >
                 <option value="A1">A1 (Beginner - Sơ cấp)</option>
                 <option value="A2">A2 (Elementary - Sơ cấp)</option>
@@ -124,11 +122,11 @@ export function AdminCourseForm({ editingCourse, onFinished }: AdminCourseFormPr
               </select>
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-bold uppercase text-slate-500">Trạng thái (Status)</label>
+              <label className="text-xs font-bold uppercase text-muted-foreground">Trạng thái (Status)</label>
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value as any)}
-                className="flex h-9 w-full border border-slate-300 dark:border-slate-800 bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus:outline-none focus:ring-0 rounded-none dark:bg-slate-950"
+                className="flex h-8 w-full border border-input bg-background px-2.5 py-1 text-xs text-foreground shadow-sm transition-colors outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50 disabled:opacity-50 dark:bg-input/30"
               >
                 <option value="draft">DRAFT (Bản nháp)</option>
                 <option value="published">PUBLISHED (Xuất bản)</option>
@@ -143,7 +141,7 @@ export function AdminCourseForm({ editingCourse, onFinished }: AdminCourseFormPr
                 type="button"
                 variant="outline"
                 onClick={onFinished}
-                className="rounded-none border-slate-300 hover:bg-slate-100 text-xs font-bold"
+                className="text-xs font-bold"
               >
                 HỦY CHỈNH SỬA
               </Button>
@@ -151,7 +149,8 @@ export function AdminCourseForm({ editingCourse, onFinished }: AdminCourseFormPr
             <Button
               type="submit"
               disabled={createCourse.isPending || updateCourse.isPending}
-              className="rounded-none bg-slate-950 text-white hover:bg-slate-850 dark:bg-slate-100 dark:text-slate-950 dark:hover:bg-slate-200 text-xs font-bold"
+              variant="default"
+              className="text-xs font-bold"
             >
               {createCourse.isPending || updateCourse.isPending
                 ? "ĐANG LƯU..."

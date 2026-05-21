@@ -5,6 +5,7 @@ import { trpc } from "@/utils/trpc";
 import { useStudentLearning } from "../hooks/use-student-learning";
 import { Button } from "@engducation/ui/components/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@engducation/ui/components/card";
+import { Badge } from "@engducation/ui/components/badge";
 
 interface QuizEngineProps {
   courseId: string;
@@ -86,10 +87,10 @@ export function QuizEngine({ courseId, lessonId, lessonTitle, onClose }: QuizEng
 
   if (quizError) {
     return (
-      <Card className="border border-red-300 bg-red-50 dark:bg-red-950/20 text-red-700 dark:text-red-300 rounded-none p-4 text-xs text-center space-y-2">
+      <Card className="border border-destructive bg-destructive/10 text-destructive dark:bg-destructive/20 p-4 text-xs text-center space-y-2 rounded-md">
         <p className="font-bold">Không tìm thấy bài tập trắc nghiệm cho bài học này.</p>
-        <p className="text-[10px] text-red-500 font-mono">Chi tiết: {quizError.message}</p>
-        <Button variant="outline" onClick={onClose} className="rounded-none border-red-300 text-xs h-7 py-1 px-3 mt-1">
+        <p className="text-[10px] text-destructive font-mono">Chi tiết: {quizError.message}</p>
+        <Button variant="destructive" onClick={onClose} size="sm" className="mt-1">
           Quay lại bài học
         </Button>
       </Card>
@@ -98,44 +99,49 @@ export function QuizEngine({ courseId, lessonId, lessonTitle, onClose }: QuizEng
 
   if (!quizData) {
     return (
-      <div className="p-4 text-xs italic text-slate-500 text-center">
+      <div className="p-4 text-xs italic text-muted-foreground text-center">
         Không có dữ liệu bài tập trắc nghiệm.
       </div>
     );
   }
 
   return (
-    <Card className="border-2 border-slate-900 dark:border-slate-100 rounded-none bg-white dark:bg-slate-950 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.1)]">
-      <CardHeader className="py-3.5 border-b-2 border-slate-900 dark:border-slate-800 flex flex-row items-center justify-between">
+    <Card className="border border-border rounded-md bg-card">
+      <CardHeader className="py-3.5 border-b border-border flex flex-row items-center justify-between bg-muted/20">
         <div>
-          <CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-900 dark:text-slate-100">
+          <CardTitle className="text-sm font-bold uppercase tracking-wider text-foreground">
             Bài tập: {quizData.title}
           </CardTitle>
-          <div className="text-[10px] text-slate-400 mt-1">Gắn với bài học: {lessonTitle}</div>
+          <div className="text-[10px] text-muted-foreground mt-1">Gắn với bài học: {lessonTitle}</div>
         </div>
         <Button
           variant="outline"
           onClick={onClose}
-          className="rounded-none border-slate-300 dark:border-slate-700 text-xs h-7 py-0 px-2.5 font-bold"
+          size="sm"
+          className="font-bold"
         >
           QUAY LẠI HỌC 📖
         </Button>
       </CardHeader>
-      <CardContent className="p-4 space-y-5 text-xs">
+      <CardContent className="p-4 space-y-5 text-xs text-foreground">
         {quizResult ? (
           /* DISPLAY EVALUATION BREAKDOWN BOX BELOW THE FORM */
           <div className="space-y-4">
             {/* Grade summary card */}
-            <div className={`p-4 border-2 border-slate-900 dark:border-slate-100 rounded-none flex items-center justify-between ${quizResult.passed ? 'bg-green-50/50 dark:bg-green-950/20' : 'bg-amber-50/50 dark:bg-amber-950/20'}`}>
+            <div className={`p-4 border rounded-md flex items-center justify-between ${
+              quizResult.passed 
+                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400' 
+                : 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400'
+            }`}>
               <div className="space-y-1">
                 <div className="text-sm font-bold uppercase tracking-wide">
                   Kết quả: {quizResult.passed ? "👉 ĐÃ HOÀN THÀNH" : "👉 CHƯA ĐẠT"}
                 </div>
-                <div className="text-[11px] text-slate-500 leading-relaxed">
+                <div className="text-[11px] leading-relaxed opacity-90">
                   Bạn trả lời đúng {quizResult.correctCount}/{quizResult.totalQuestions} câu hỏi.
                   Điểm số đạt được: <span className="font-bold font-mono text-xs">{quizResult.score}/100</span>
                 </div>
-                <div className="text-[10px] text-slate-400 italic">
+                <div className="text-[10px] opacity-75 italic">
                   (Yêu cầu vượt qua: 70 điểm)
                 </div>
               </div>
@@ -144,31 +150,35 @@ export function QuizEngine({ courseId, lessonId, lessonTitle, onClose }: QuizEng
 
             {/* Answer details list */}
             <div className="space-y-3">
-              <div className="font-bold uppercase text-slate-500 text-[10px] tracking-wider">Chi tiết sửa bài chi tiết từ Server</div>
+              <div className="font-bold uppercase text-muted-foreground text-[10px] tracking-wider">Chi tiết sửa bài chi tiết từ Server</div>
               {quizResult.results.map((res: any, idx: number) => {
                 const questionDetail = quizData.questions.find((q) => q.id === res.questionId);
                 return (
-                  <div key={res.questionId} className={`p-3 border border-slate-300 dark:border-slate-800 bg-white dark:bg-slate-950 space-y-2`}>
-                    <div className="font-bold flex items-start gap-1.5">
+                  <div key={res.questionId} className="p-3 border border-border bg-card rounded-md space-y-2">
+                    <div className="font-bold flex items-start gap-1.5 text-foreground">
                       <span>Câu {idx + 1}:</span>
                       <span>{questionDetail?.content}</span>
                     </div>
 
                     {/* Breakdown details */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pl-2">
-                      <div className={`p-2 border ${res.isCorrect ? 'border-green-300 bg-green-50/50 text-green-700 dark:bg-green-950/10 dark:text-green-400' : 'border-red-300 bg-red-50/50 text-red-700 dark:bg-red-950/10 dark:text-red-400'} text-[11px]`}>
+                      <div className={`p-2 border rounded-md ${
+                        res.isCorrect 
+                          ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400' 
+                          : 'border-destructive/30 bg-destructive/10 text-destructive'
+                      } text-[11px]`}>
                         Lựa chọn của bạn: <span className="font-bold">{res.selectedOption}</span>
                         {res.isCorrect ? " (Chính xác!)" : " (Sai)"}
                       </div>
-                      <div className="p-2 border border-green-300 bg-green-50/50 text-green-700 dark:bg-green-950/10 dark:text-green-400 text-[11px] font-medium">
+                      <div className="p-2 border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 text-[11px] font-medium rounded-md">
                         Đáp án đúng từ server: <span className="font-bold">{res.correctOption}</span>
                       </div>
                     </div>
 
                     {/* Explanation */}
                     {res.explanation && (
-                      <div className="text-[11.px] text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/60 p-2.5 border-l-2 border-indigo-500 italic mt-2.5 leading-relaxed">
-                        <span className="font-bold text-[10px] uppercase text-indigo-500 not-italic block mb-0.5">Lời giải & Giải thích của giáo viên:</span>
+                      <div className="text-[11px] text-muted-foreground bg-muted/40 p-2.5 border-l-2 border-primary italic mt-2.5 leading-relaxed rounded-r-md">
+                        <span className="font-bold text-[10px] uppercase text-primary not-italic block mb-0.5">Lời giải & Giải thích của giáo viên:</span>
                         "{res.explanation}"
                       </div>
                     )}
@@ -177,11 +187,11 @@ export function QuizEngine({ courseId, lessonId, lessonTitle, onClose }: QuizEng
               })}
             </div>
 
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
-              <Button variant="outline" onClick={handleRetake} className="rounded-none border-slate-300 font-bold">
+            <div className="flex justify-end gap-2 pt-2 border-t border-border">
+              <Button variant="outline" onClick={handleRetake} className="font-bold">
                 LÀM LẠI BÀI (RETAKE) 🔄
               </Button>
-              <Button onClick={onClose} className="rounded-none bg-slate-950 text-white hover:bg-slate-900 dark:bg-slate-100 dark:text-slate-950 font-bold">
+              <Button onClick={onClose} variant="default" className="font-bold">
                 HOÀN THÀNH QUIZ
               </Button>
             </div>
@@ -195,8 +205,8 @@ export function QuizEngine({ courseId, lessonId, lessonTitle, onClose }: QuizEng
                 const letters = ["A", "B", "C", "D"] as const;
 
                 return (
-                  <div key={q.id} className="p-4 border border-slate-300 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 space-y-3">
-                    <div className="font-bold text-slate-800 dark:text-slate-200">
+                  <div key={q.id} className="p-4 border border-border bg-muted/20 rounded-md space-y-3">
+                    <div className="font-bold text-foreground">
                       Câu {qIdx + 1}: {q.content}
                     </div>
 
@@ -209,10 +219,10 @@ export function QuizEngine({ courseId, lessonId, lessonTitle, onClose }: QuizEng
                         return (
                           <label
                             key={ans.id}
-                            className={`flex items-center gap-2.5 p-2.5 border transition-all cursor-pointer select-none text-[11px] ${
+                            className={`flex items-center gap-2.5 p-2.5 border border-border transition-all cursor-pointer select-none text-[11px] rounded-md ${
                               isChecked
-                                ? "border-slate-900 dark:border-slate-100 bg-white dark:bg-slate-950 font-bold shadow-[2px_2px_0px_0px_rgba(0,0,0,0.1)]"
-                                : "border-slate-200 hover:border-slate-400 bg-white dark:bg-slate-950 dark:border-slate-800"
+                                ? "border-primary bg-accent text-accent-foreground font-bold"
+                                : "hover:bg-accent/50 hover:text-accent-foreground bg-card text-card-foreground"
                             }`}
                           >
                             {/* 🔒 ANTI-CHEAT: Absolutely NO answer UUID bound to value input, only the safe string literal index letter "A","B","C","D" */}
@@ -222,9 +232,9 @@ export function QuizEngine({ courseId, lessonId, lessonTitle, onClose }: QuizEng
                               value={letter}
                               checked={isChecked}
                               onChange={() => handleOptionChange(q.id, letter)}
-                              className="h-4 w-4 text-slate-900 focus:ring-0"
+                              className="h-4 w-4 text-primary focus:ring-0 accent-primary"
                             />
-                            <span className="font-mono font-bold text-slate-500">{letter}.</span>
+                            <span className="font-mono font-bold text-muted-foreground">{letter}.</span>
                             <span>{ans.content}</span>
                           </label>
                         );
@@ -235,14 +245,16 @@ export function QuizEngine({ courseId, lessonId, lessonTitle, onClose }: QuizEng
               })}
             </div>
 
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
-              <Button type="button" variant="outline" onClick={onClose} className="rounded-none border-slate-300 font-bold">
+            <div className="flex justify-end gap-2 pt-2 border-t border-border">
+              <Button type="button" variant="outline" onClick={onClose} className="font-bold">
                 BỎ QUA (CANCEL)
               </Button>
               <Button
                 type="submit"
                 disabled={submitQuiz.isPending}
-                className="rounded-none bg-indigo-600 hover:bg-indigo-700 text-white font-bold h-9 px-5"
+                variant="default"
+                size="lg"
+                className="font-bold"
               >
                 {submitQuiz.isPending ? "ĐANG CHẤM ĐIỂM..." : "NỘP BÀI TẬP (SUBMIT ANSWERS) 🚀"}
               </Button>

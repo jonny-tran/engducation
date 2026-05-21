@@ -34,14 +34,14 @@ export default async function UserProfilePage({ params }: PageProps) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50/30 dark:bg-slate-950/40 flex flex-col w-full">
+    <div className="min-h-screen bg-background flex flex-col w-full">
       {/* Premium custom top navbar for student classroom */}
-      <header className="flex h-16 shrink-0 items-center justify-between border-b px-6 bg-background/80 backdrop-blur-md sticky top-0 z-10 border-muted/50 shadow-sm">
+      <header className="flex h-16 shrink-0 items-center justify-between border-b px-6 bg-background/80 backdrop-blur-md sticky top-0 z-10 border-border shadow-sm">
         <div className="flex items-center gap-3">
-          <span className="text-lg font-extrabold bg-gradient-to-r from-indigo-600 via-indigo-500 to-purple-600 bg-clip-text text-transparent tracking-tight">
+          <span className="text-lg font-extrabold bg-gradient-to-r from-primary to-primary/80 bg-clip-text text-transparent tracking-tight">
             🎓 engducation
           </span>
-          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 tracking-wider">
+          <span className="px-2 py-0.5 border border-primary/20 rounded-full text-[9px] font-bold uppercase bg-primary/10 text-primary tracking-wider">
             Lớp học ({session.user.name})
           </span>
         </div>

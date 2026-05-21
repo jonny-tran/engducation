@@ -1,1 +1,4 @@
 @import "@engducation/ui/globals.css";
+
+@source "./**/*.{ts,tsx}";
+@source "../../../packages/ui/src/**/*.{ts,tsx}";

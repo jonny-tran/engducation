@@ -6,6 +6,8 @@ import { LessonPlayer } from "./lesson-player";
 import { QuizEngine } from "./quiz-engine";
 import { Card, CardHeader, CardTitle, CardContent } from "@engducation/ui/components/card";
 import { Button } from "@engducation/ui/components/button";
+import { Badge } from "@engducation/ui/components/badge";
+import { Progress } from "@engducation/ui/components/progress";
 
 export function StudentDashboardView() {
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
@@ -45,11 +47,11 @@ export function StudentDashboardView() {
   return (
     <div className="flex flex-col flex-1 h-full w-full p-1 space-y-4 text-xs text-slate-800 dark:text-slate-100">
       {/* HEADER BANNER */}
-      <div className="p-4 border-2 border-slate-900 dark:border-slate-100 rounded-none bg-indigo-50 dark:bg-slate-900/50">
-        <h1 className="text-sm font-bold uppercase tracking-wider text-slate-900 dark:text-slate-100">
+      <div className="p-4 border border-border rounded-md bg-muted/40 text-foreground">
+        <h1 className="text-sm font-bold uppercase tracking-wider">
           Không gian Học tập & Tích hợp Nội dung
         </h1>
-        <p className="text-[10px] text-slate-500 mt-1">
+        <p className="text-[10px] text-muted-foreground mt-1">
           Dành cho học viên: Duyệt khóa học, xem bài giảng Cloudinary Signed URL và củng cố kiến thức qua đề thi trắc nghiệm.
         </p>
       </div>
@@ -58,8 +60,8 @@ export function StudentDashboardView() {
         {/* LEFT COLUMN: COURSE DIRECTORY & SYLLABUS LIST (1 COL) */}
         <div className="space-y-4 lg:col-span-1">
           {/* Courses List */}
-          <Card className="border border-slate-300 dark:border-slate-800 rounded-none">
-            <CardHeader className="py-2.5 border-b border-slate-200 dark:border-slate-800">
+          <Card className="border border-border rounded-md">
+            <CardHeader className="py-2.5 border-b border-border bg-muted/20">
               <CardTitle className="text-xs font-bold uppercase tracking-wider">
                 Khóa học đã xuất bản ({coursesData?.items.length ?? 0})
               </CardTitle>
@@ -80,27 +82,21 @@ export function StudentDashboardView() {
                     <button
                       key={course.id}
                       onClick={() => handleCourseSelect(course.id)}
-                      className={`w-full text-left p-2.5 border transition-all text-xs flex flex-col gap-1 rounded-none ${isSelected
-                          ? "border-slate-900 dark:border-slate-100 bg-slate-100 dark:bg-slate-800 font-bold"
-                          : "border-slate-200 hover:border-slate-300 bg-white dark:bg-slate-950 dark:border-slate-800"
+                      className={`w-full text-left p-2.5 border transition-all text-xs flex flex-col gap-1 rounded-md ${isSelected
+                          ? "border-primary bg-accent text-accent-foreground font-bold"
+                          : "border-border hover:bg-accent/50 hover:text-accent-foreground bg-card text-card-foreground"
                         }`}
                     >
                       <div className="flex justify-between items-center w-full">
                         <span className="font-bold line-clamp-1">{course.title}</span>
-                        <span className="px-1 py-0.5 border border-slate-300 dark:border-slate-800 text-[9px] font-mono leading-none">
+                        <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 font-mono font-bold leading-none">
                           {course.level}
-                        </span>
+                        </Badge>
                       </div>
-                      <div className="flex justify-between items-center text-[10px] text-slate-400 mt-1">
+                      <div className="flex justify-between items-center text-[10px] text-muted-foreground mt-1">
                         <span>Tiến trình: {course.completedLessons}/{course.totalLessons} bài học ({percentComplete}%)</span>
                       </div>
-                      {/* Simple progress bar */}
-                      <div className="w-full bg-slate-200 dark:bg-slate-800 h-1 mt-1">
-                        <div
-                          className="bg-indigo-600 h-1 transition-all duration-300"
-                          style={{ width: `${percentComplete}%` }}
-                        />
-                      </div>
+                      <Progress value={percentComplete} className="w-full mt-1.5" />
                     </button>
                   );
                 })
@@ -110,8 +106,8 @@ export function StudentDashboardView() {
 
           {/* Syllabus (Lessons of Selected Course) */}
           {selectedCourseId && (
-            <Card className="border border-slate-300 dark:border-slate-800 rounded-none bg-slate-50/20 dark:bg-slate-900/10">
-              <CardHeader className="py-2.5 border-b border-slate-200 dark:border-slate-800">
+            <Card className="border border-border rounded-md">
+              <CardHeader className="py-2.5 border-b border-border bg-muted/20">
                 <CardTitle className="text-xs font-bold uppercase tracking-wider flex items-center justify-between">
                   <span>Đề cương: {courseDetail?.title ?? "..."}</span>
                   <Button
@@ -134,38 +130,42 @@ export function StudentDashboardView() {
                       const isSelected = selectedLessonId === lesson.id;
                       const hasVideo = lesson.videoUrl || lesson.videoPublicId;
 
-                      // Progress status color
-                      // COMPLETED: Green, LEARNING: Yellow, null/other: Grey
-                      let statusBg = "border-slate-300 text-slate-500 bg-slate-100 dark:bg-slate-900";
+                      let statusBadge = (
+                        <Badge variant="outline" className="text-[9px] font-bold uppercase">
+                          NOT STARTED
+                        </Badge>
+                      );
                       if (lesson.progressStatus === "completed") {
-                        statusBg = "border-green-300 text-green-700 bg-green-50/50 dark:bg-green-950/20 dark:text-green-400";
+                        statusBadge = (
+                          <Badge className="text-[9px] font-bold uppercase bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/20">
+                            COMPLETED
+                          </Badge>
+                        );
                       } else if (lesson.progressStatus === "learning") {
-                        statusBg = "border-yellow-300 text-yellow-700 bg-yellow-50/50 dark:bg-yellow-950/20 dark:text-yellow-400";
+                        statusBadge = (
+                          <Badge className="text-[9px] font-bold uppercase bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/20">
+                            LEARNING
+                          </Badge>
+                        );
                       }
 
                       return (
                         <button
                           key={lesson.id}
                           onClick={() => handleLessonSelect(lesson.id)}
-                          className={`w-full text-left p-2.5 border transition-all text-[11px] flex justify-between items-center rounded-none ${isSelected
-                              ? "border-slate-900 dark:border-slate-100 bg-white dark:bg-slate-950 font-bold shadow-[2px_2px_0px_0px_rgba(0,0,0,0.1)]"
-                              : "border-slate-200 hover:border-slate-300 bg-white dark:bg-slate-950 dark:border-slate-800"
+                          className={`w-full text-left p-2.5 border transition-all text-[11px] flex justify-between items-center rounded-md ${isSelected
+                              ? "border-primary bg-accent text-accent-foreground font-bold"
+                              : "border-border hover:bg-accent/50 hover:text-accent-foreground bg-card text-card-foreground"
                             }`}
                         >
                           <div className="flex flex-col gap-0.5 max-w-[70%]">
                             <span className="font-medium text-xs line-clamp-1">{lesson.title}</span>
-                            <span className="text-[9px] text-slate-400 font-mono">
+                            <span className="text-[9px] text-muted-foreground font-mono">
                               Bài {lesson.order} · {hasVideo ? "VIDEO" : "TEXT"}
                             </span>
                           </div>
 
-                          <span className={`px-1.5 py-0.5 border text-[9px] font-bold leading-none uppercase ${statusBg}`}>
-                            {lesson.progressStatus === "completed"
-                              ? "COMPLETED"
-                              : lesson.progressStatus === "learning"
-                                ? "LEARNING"
-                                : "NOT STARTED"}
-                          </span>
+                          {statusBadge}
                         </button>
                       );
                     })}
@@ -197,10 +197,10 @@ export function StudentDashboardView() {
             )
           ) : (
             /* Empty State Workspace Placeholder */
-            <Card className="border border-slate-300 dark:border-slate-800 border-dashed rounded-none bg-slate-50/10 p-16 flex flex-col items-center justify-center text-center space-y-3">
+            <Card className="border border-dashed border-border rounded-md bg-muted/10 p-16 flex flex-col items-center justify-center text-center space-y-3">
               <span className="text-4xl">🎓</span>
-              <div className="font-bold text-sm text-slate-600 dark:text-slate-300">Không gian học tập trống</div>
-              <p className="text-[11px] text-slate-400 max-w-sm leading-relaxed">
+              <div className="font-bold text-sm text-foreground">Không gian học tập trống</div>
+              <p className="text-[11px] text-muted-foreground max-w-sm leading-relaxed">
                 Vui lòng chọn một khóa học ở danh mục bên trái, sau đó click vào bài học để tải video bài giảng Cloudinary và theo dõi tiến độ của bạn.
               </p>
             </Card>

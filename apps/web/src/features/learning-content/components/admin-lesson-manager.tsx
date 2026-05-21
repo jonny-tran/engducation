@@ -5,6 +5,7 @@ import { Button } from "@engducation/ui/components/button";
 import { Input } from "@engducation/ui/components/input";
 import { Textarea } from "@engducation/ui/components/textarea";
 import { Card, CardHeader, CardTitle, CardContent } from "@engducation/ui/components/card";
+import { Badge } from "@engducation/ui/components/badge";
 
 interface LessonData {
   id: string;
@@ -118,19 +119,19 @@ export function AdminLessonManager({ courseId, lessons, onSelectLessonForQuiz }:
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
       {/* Lesson List View */}
-      <Card className="lg:col-span-2 border border-slate-300 dark:border-slate-800 rounded-none">
-        <CardHeader className="py-3 border-b border-slate-200 dark:border-slate-800">
-          <CardTitle className="text-sm font-bold uppercase tracking-wider">
+      <Card className="lg:col-span-2 border border-border bg-card">
+        <CardHeader className="py-3 border-b border-border bg-muted/20">
+          <CardTitle className="text-sm font-bold uppercase tracking-wider text-foreground">
             Danh sách bài học ({lessons.length})
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           {lessons.length === 0 ? (
-            <p className="p-4 text-xs text-slate-500 italic">Chưa có bài học nào trong khóa này.</p>
+            <p className="p-4 text-xs text-muted-foreground italic">Chưa có bài học nào trong khóa này.</p>
           ) : (
             <table className="w-full text-xs text-left border-collapse">
               <thead>
-                <tr className="bg-slate-100 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 font-bold uppercase text-slate-500">
+                <tr className="bg-muted/50 border-b border-border font-bold uppercase text-muted-foreground">
                   <th className="p-2.5 w-12 text-center">STT</th>
                   <th className="p-2.5">Bài học</th>
                   <th className="p-2.5 w-16 text-center">Loại</th>
@@ -138,46 +139,60 @@ export function AdminLessonManager({ courseId, lessons, onSelectLessonForQuiz }:
                   <th className="p-2.5 w-40 text-center">Thao tác</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+              <tbody className="divide-y divide-border">
                 {lessons.map((lesson, index) => {
                   const isVideo = lesson.videoUrl || lesson.videoPublicId;
                   return (
-                    <tr key={lesson.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/50">
-                      <td className="p-2.5 text-center font-mono">{lesson.order}</td>
+                    <tr key={lesson.id} className="hover:bg-muted/30">
+                      <td className="p-2.5 text-center font-mono text-muted-foreground">{lesson.order}</td>
                       <td className="p-2.5">
-                        <div className="font-bold">{lesson.title}</div>
+                        <div className="font-bold text-foreground">{lesson.title}</div>
                         {lesson.description && (
-                          <div className="text-[10px] text-slate-400 mt-0.5 line-clamp-1">{lesson.description}</div>
+                          <div className="text-[10px] text-muted-foreground mt-0.5 line-clamp-1">{lesson.description}</div>
                         )}
                         {isVideo && (
-                          <div className="text-[9px] text-slate-400 font-mono mt-0.5 break-all">
+                          <div className="text-[9px] text-muted-foreground font-mono mt-0.5 break-all">
                             ID: {lesson.videoPublicId} | URL: {lesson.videoUrl?.slice(0, 40)}...
                           </div>
                         )}
                       </td>
                       <td className="p-2.5 text-center">
-                        <span className={`px-1.5 py-0.5 border text-[9px] font-bold ${isVideo ? 'border-blue-300 text-blue-500 bg-blue-50 dark:bg-blue-950/20' : 'border-slate-300 text-slate-500 bg-slate-50 dark:bg-slate-900'}`}>
+                        <Badge
+                          variant="outline"
+                          className={`text-[9px] font-bold ${
+                            isVideo
+                              ? "border-blue-500/20 text-blue-600 bg-blue-500/10"
+                              : "border-border text-muted-foreground bg-muted"
+                          }`}
+                        >
                           {isVideo ? "VIDEO" : "TEXT"}
-                        </span>
+                        </Badge>
                       </td>
                       <td className="p-2.5 text-center">
-                        <span className={`px-1.5 py-0.5 border text-[9px] font-bold ${lesson.status === 'published' ? 'border-emerald-300 text-emerald-500 bg-emerald-50 dark:bg-emerald-950/20' : 'border-amber-300 text-amber-500 bg-amber-50 dark:bg-amber-950/20'}`}>
-                          {lesson.status.toUpperCase()}
-                        </span>
+                        <Badge
+                          variant="outline"
+                          className={`text-[9px] font-bold uppercase ${
+                            lesson.status === "published"
+                              ? "border-emerald-500/20 text-emerald-600 bg-emerald-500/10"
+                              : "border-amber-500/20 text-amber-600 bg-amber-500/10"
+                          }`}
+                        >
+                          {lesson.status}
+                        </Badge>
                       </td>
                       <td className="p-2.5">
                         <div className="flex flex-wrap gap-1 justify-center">
                           <Button
                             variant="outline"
                             onClick={() => handleEditClick(lesson)}
-                            className="rounded-none border-slate-300 dark:border-slate-700 px-1.5 py-0.5 h-6 text-[10px] font-bold"
+                            className="px-1.5 py-0.5 h-6 text-[10px] font-bold"
                           >
                             SỬA
                           </Button>
                           <Button
                             variant="destructive"
                             onClick={() => handleDelete(lesson.id)}
-                            className="rounded-none px-1.5 py-0.5 h-6 text-[10px] font-bold"
+                            className="px-1.5 py-0.5 h-6 text-[10px] font-bold"
                           >
                             XÓA
                           </Button>
@@ -185,7 +200,7 @@ export function AdminLessonManager({ courseId, lessons, onSelectLessonForQuiz }:
                             variant="outline"
                             disabled={index === 0}
                             onClick={() => handleMove(index, "UP")}
-                            className="rounded-none border-slate-300 dark:border-slate-700 px-1.5 py-0.5 h-6 text-[10px]"
+                            className="px-1.5 py-0.5 h-6 text-[10px]"
                           >
                             ▲
                           </Button>
@@ -193,13 +208,14 @@ export function AdminLessonManager({ courseId, lessons, onSelectLessonForQuiz }:
                             variant="outline"
                             disabled={index === lessons.length - 1}
                             onClick={() => handleMove(index, "DOWN")}
-                            className="rounded-none border-slate-300 dark:border-slate-700 px-1.5 py-0.5 h-6 text-[10px]"
+                            className="px-1.5 py-0.5 h-6 text-[10px]"
                           >
                             ▼
                           </Button>
                           <Button
+                            variant="default"
                             onClick={() => onSelectLessonForQuiz(lesson)}
-                            className="rounded-none bg-slate-900 text-white hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 px-1.5 py-0.5 h-6 text-[10px] font-bold"
+                            className="px-1.5 py-0.5 h-6 text-[10px] font-bold"
                           >
                             QUIZ
                           </Button>
@@ -215,92 +231,90 @@ export function AdminLessonManager({ courseId, lessons, onSelectLessonForQuiz }:
       </Card>
 
       {/* Lesson Creation / Edit Form */}
-      <Card className="border border-slate-300 dark:border-slate-800 rounded-none bg-slate-50/50 dark:bg-slate-900/50">
-        <CardHeader className="py-3 border-b border-slate-200 dark:border-slate-800">
-          <CardTitle className="text-sm font-bold uppercase tracking-wider">
+      <Card className="border border-border bg-card">
+        <CardHeader className="py-3 border-b border-border bg-muted/20">
+          <CardTitle className="text-sm font-bold uppercase tracking-wider text-foreground">
             {editingLessonId ? "Sửa bài học" : "Thêm bài học"}
           </CardTitle>
         </CardHeader>
         <CardContent className="p-4">
           <form onSubmit={handleSubmit} className="space-y-3.5 text-xs">
             <div className="flex flex-col gap-1.5">
-              <label className="font-bold uppercase text-slate-500">Tiêu đề bài học *</label>
+              <label className="font-bold uppercase text-muted-foreground">Tiêu đề bài học *</label>
               <Input
                 required
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Nhập tiêu đề..."
-                className="rounded-none border-slate-300 dark:border-slate-800 focus-visible:ring-0 text-xs"
               />
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <label className="font-bold uppercase text-slate-500">Mô tả ngắn</label>
+              <label className="font-bold uppercase text-muted-foreground">Mô tả ngắn</label>
               <Textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Mô tả bài học..."
-                className="rounded-none border-slate-300 dark:border-slate-800 focus-visible:ring-0 min-h-[50px] text-xs"
+                className="min-h-[50px]"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-2">
               <div className="flex flex-col gap-1.5">
-                <label className="font-bold uppercase text-slate-500">Loại bài học</label>
+                <label className="font-bold uppercase text-muted-foreground">Loại bài học</label>
                 <select
                   value={lessonType}
                   onChange={(e) => setLessonType(e.target.value as any)}
-                  className="flex h-9 w-full border border-slate-300 dark:border-slate-800 bg-transparent px-3 py-1 shadow-sm focus:outline-none focus:ring-0 rounded-none dark:bg-slate-950 text-xs"
+                  className="flex h-8 w-full border border-input bg-background px-2.5 py-1 text-xs text-foreground shadow-sm transition-colors outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50 disabled:opacity-50 dark:bg-input/30"
                 >
                   <option value="TEXT">Bài học đọc (TEXT)</option>
                   <option value="VIDEO">Bài giảng video (VIDEO)</option>
                 </select>
               </div>
               <div className="flex flex-col gap-1.5">
-                <label className="font-bold uppercase text-slate-500">Thứ tự (Order)</label>
+                <label className="font-bold uppercase text-muted-foreground">Thứ tự (Order)</label>
                 <Input
                   type="number"
                   min="1"
                   value={orderInput}
                   onChange={(e) => setOrderInput(e.target.value)}
                   placeholder="Để trống = tự tăng"
-                  className="rounded-none border-slate-300 dark:border-slate-800 focus-visible:ring-0 text-xs"
                 />
               </div>
             </div>
 
             {lessonType === "VIDEO" && (
-              <div className="p-3 border border-dashed border-slate-300 dark:border-slate-800 bg-slate-100/50 dark:bg-slate-900/50 space-y-2">
+              <div className="p-3 border border-dashed border-border bg-muted/30 space-y-2 rounded-md">
                 <div className="flex flex-col gap-1">
-                  <label className="font-bold uppercase text-slate-500 text-[10px]">Cloudinary Public ID *</label>
+                  <label className="font-bold uppercase text-muted-foreground text-[10px]">Cloudinary Public ID *</label>
                   <Input
                     required={lessonType === "VIDEO"}
                     value={videoPublicId}
                     onChange={(e) => setVideoPublicId(e.target.value)}
                     placeholder="ví dụ: courses/intro_video"
-                    className="rounded-none border-slate-300 dark:border-slate-800 focus-visible:ring-0 h-8 text-xs"
+                    className="h-8 text-xs"
                   />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <label className="font-bold uppercase text-slate-500 text-[10px]">Cloudinary Video URL *</label>
+                  <label className="font-bold uppercase text-muted-foreground text-[10px]">Cloudinary Video URL *</label>
                   <Input
                     required={lessonType === "VIDEO"}
                     type="url"
                     value={videoUrl}
                     onChange={(e) => setVideoUrl(e.target.value)}
                     placeholder="https://res.cloudinary.com/..."
-                    className="rounded-none border-slate-300 dark:border-slate-800 focus-visible:ring-0 h-8 text-xs"
+                    className="h-8 text-xs"
                   />
                 </div>
               </div>
             )}
 
             <div className="flex flex-col gap-1.5">
-              <label className="font-bold uppercase text-slate-500">Trạng thái (Status)</label>
+              <label className="font-bold uppercase text-muted-foreground">Trạng thái (Status)</label>
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value as any)}
-                className="flex h-9 w-full border border-slate-300 dark:border-slate-800 bg-transparent px-3 py-1 shadow-sm focus:outline-none focus:ring-0 rounded-none dark:bg-slate-950 text-xs"
+                className="flex h-8 w-full border border-input bg-background px-2.5 py-1 text-xs text-foreground shadow-sm transition-colors outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50 disabled:opacity-50 dark:bg-input/30"
               >
                 <option value="draft">DRAFT (Bản nháp)</option>
                 <option value="published">PUBLISHED (Xuất bản)</option>
@@ -314,7 +328,7 @@ export function AdminLessonManager({ courseId, lessons, onSelectLessonForQuiz }:
                   type="button"
                   variant="outline"
                   onClick={resetForm}
-                  className="rounded-none border-slate-300 hover:bg-slate-100 font-bold"
+                  className="font-bold"
                 >
                   HỦY
                 </Button>
@@ -322,7 +336,8 @@ export function AdminLessonManager({ courseId, lessons, onSelectLessonForQuiz }:
               <Button
                 type="submit"
                 disabled={createLesson.isPending || updateLesson.isPending}
-                className="rounded-none bg-slate-950 text-white hover:bg-slate-900 dark:bg-slate-100 dark:text-slate-950 dark:hover:bg-slate-200 font-bold"
+                variant="default"
+                className="font-bold"
               >
                 {createLesson.isPending || updateLesson.isPending ? "ĐANG LƯU..." : editingLessonId ? "CẬP NHẬT" : "THÊM MỚI"}
               </Button>

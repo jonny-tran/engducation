@@ -3,6 +3,7 @@ import { useEffect, useState, useRef } from "react";
 import { useStudentLearning } from "../hooks/use-student-learning";
 import { Button } from "@engducation/ui/components/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@engducation/ui/components/card";
+import { Badge } from "@engducation/ui/components/badge";
 
 interface LessonPlayerProps {
   courseId: string;
@@ -78,38 +79,36 @@ export function LessonPlayer({ courseId, lesson, onTakeQuiz }: LessonPlayerProps
   };
 
   return (
-    <Card className="border border-slate-300 dark:border-slate-800 rounded-none bg-slate-50/50 dark:bg-slate-900/50">
-      <CardHeader className="py-3 border-b border-slate-200 dark:border-slate-800 flex flex-row items-center justify-between">
+    <Card className="border border-border rounded-md bg-card">
+      <CardHeader className="py-3 border-b border-border flex flex-row items-center justify-between bg-muted/20">
         <div>
-          <CardTitle className="text-sm font-bold uppercase tracking-wider">
+          <CardTitle className="text-sm font-bold uppercase tracking-wider text-foreground">
             {lesson.title}
           </CardTitle>
-          <div className="text-[10px] text-slate-400 mt-1 font-mono">Lesson ID: {lesson.id}</div>
+          <div className="text-[10px] text-muted-foreground mt-1 font-mono">Lesson ID: {lesson.id}</div>
         </div>
-        <span
-          className={`px-1.5 py-0.5 border text-[9px] font-bold ${
-            lesson.progressStatus === "completed"
-              ? "border-green-300 bg-green-50 text-green-500 dark:bg-green-950/20"
-              : lesson.progressStatus === "learning"
-              ? "border-yellow-300 bg-yellow-50 text-yellow-500 dark:bg-yellow-950/20"
-              : "border-slate-300 bg-slate-50 text-slate-500 dark:bg-slate-900"
-          }`}
-        >
-          {lesson.progressStatus === "completed"
-            ? "COMPLETED"
-            : lesson.progressStatus === "learning"
-            ? "LEARNING"
-            : "NOT STARTED"}
-        </span>
+        {lesson.progressStatus === "completed" ? (
+          <Badge className="text-[9px] font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 uppercase">
+            COMPLETED
+          </Badge>
+        ) : lesson.progressStatus === "learning" ? (
+          <Badge className="text-[9px] font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/20 uppercase">
+            LEARNING
+          </Badge>
+        ) : (
+          <Badge variant="outline" className="text-[9px] font-bold uppercase">
+            NOT STARTED
+          </Badge>
+        )}
       </CardHeader>
-      <CardContent className="p-4 space-y-4">
+      <CardContent className="p-4 space-y-4 text-foreground">
         {/* Short description */}
         {lesson.description ? (
-          <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed bg-white dark:bg-slate-950 p-3 border border-slate-200 dark:border-slate-800">
+          <p className="text-xs text-muted-foreground leading-relaxed bg-muted/30 p-3 border border-border rounded-md">
             {lesson.description}
           </p>
         ) : (
-          <p className="text-xs italic text-slate-400 bg-white dark:bg-slate-950 p-3 border border-slate-200 dark:border-slate-800">
+          <p className="text-xs italic text-muted-foreground bg-muted/30 p-3 border border-border rounded-md">
             Bài học này không có mô tả chi tiết.
           </p>
         )}
@@ -117,8 +116,8 @@ export function LessonPlayer({ courseId, lesson, onTakeQuiz }: LessonPlayerProps
         {/* Video Player */}
         {isVideo ? (
           <div className="space-y-2">
-            <label className="text-[10px] font-bold uppercase text-slate-400">Trình phát bài giảng (Cloudinary Secure Video Player)</label>
-            <div className="aspect-video bg-black flex items-center justify-center border border-slate-300 dark:border-slate-800 relative overflow-hidden">
+            <label className="text-[10px] font-bold uppercase text-muted-foreground">Trình phát bài giảng (Cloudinary Secure Video Player)</label>
+            <div className="aspect-video bg-black flex items-center justify-center border border-border rounded-lg relative overflow-hidden">
               {isLoadingVideo ? (
                 <div className="text-xs text-slate-400 font-mono animate-pulse">ĐANG KÝ SIGNED URL CLOUDINARY...</div>
               ) : signedUrl ? (
@@ -130,25 +129,26 @@ export function LessonPlayer({ courseId, lesson, onTakeQuiz }: LessonPlayerProps
                   className="w-full h-full object-contain"
                 />
               ) : (
-                <div className="text-xs text-red-400 font-mono">KHÔNG THỂ TẢI VIDEO. VUI LÒNG THỬ LẠI.</div>
+                <div className="text-xs text-rose-500 font-mono">KHÔNG THỂ TẢI VIDEO. VUI LÒNG THỬ LẠI.</div>
               )}
             </div>
-            <div className="text-[9px] text-slate-400 font-mono break-all line-clamp-1">
+            <div className="text-[9px] text-muted-foreground font-mono break-all line-clamp-1">
               Signed URL: {signedUrl ?? "chưa có"}
             </div>
           </div>
         ) : (
           /* Text Lesson Player */
-          <div className="p-10 border border-dashed border-slate-300 dark:border-slate-800 bg-white dark:bg-slate-950 flex flex-col items-center justify-center text-center space-y-3">
+          <div className="p-10 border border-dashed border-border bg-muted/10 rounded-md flex flex-col items-center justify-center text-center space-y-3">
             <span className="text-2xl">📖</span>
-            <div className="text-xs font-bold text-slate-700 dark:text-slate-300">Bài học dạng Đọc tài liệu</div>
-            <p className="text-[11px] text-slate-400 max-w-xs leading-relaxed">
+            <div className="text-xs font-bold text-foreground">Bài học dạng Đọc tài liệu</div>
+            <p className="text-[11px] text-muted-foreground max-w-xs leading-relaxed">
               Bạn có thể đọc phần mô tả bài giảng phía trên. Sau khi đã nắm vững thông tin, hãy nhấn "Đánh dấu Hoàn thành" để cập nhật tiến trình!
             </p>
             <Button
               onClick={handleMarkCompleteManual}
               disabled={trackProgress.isPending}
-              className="rounded-none bg-slate-950 text-white hover:bg-slate-900 dark:bg-slate-100 dark:text-slate-950 dark:hover:bg-slate-200 text-xs font-bold py-1 h-8"
+              variant="default"
+              className="w-full text-xs font-bold"
             >
               {trackProgress.isPending ? "ĐANG LƯU..." : "ĐÁNH DẤU HOÀN THÀNH (MARK COMPLETE)"}
             </Button>
@@ -156,14 +156,14 @@ export function LessonPlayer({ courseId, lesson, onTakeQuiz }: LessonPlayerProps
         )}
 
         {/* Footer controls & manual markers */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-200 dark:border-slate-800">
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-border">
           <div className="flex gap-2">
             {isVideo && (
               <Button
                 variant="outline"
                 onClick={handleMarkCompleteManual}
                 disabled={trackProgress.isPending}
-                className="rounded-none border-slate-300 dark:border-slate-800 text-xs font-bold h-8"
+                className="text-xs font-bold"
               >
                 {trackProgress.isPending ? "ĐANG LƯU..." : "ĐÁNH DẤU HOÀN THÀNH THỦ CÔNG"}
               </Button>
@@ -172,7 +172,8 @@ export function LessonPlayer({ courseId, lesson, onTakeQuiz }: LessonPlayerProps
 
           <Button
             onClick={onTakeQuiz}
-            className="rounded-none bg-indigo-600 text-white hover:bg-indigo-700 text-xs font-bold h-8 px-4"
+            variant="default"
+            className="text-xs font-bold px-4"
           >
             LÀM BÀI TẬP TRẮC NGHIỆM (TAKE QUIZ) ✍️
           </Button>
