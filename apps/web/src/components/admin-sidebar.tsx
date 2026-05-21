@@ -36,8 +36,7 @@ import {
   Terminal,
   LogOut,
   ChevronUp,
-  Circle,
-  Home
+  Circle
 } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { useRouter, usePathname } from "next/navigation";
@@ -173,11 +172,11 @@ export function AdminSidebar({ session, ...props }: AdminSidebarProps) {
                         </span>
                       </SidebarMenuButton>
                       <SidebarMenuSub>
-                        {item.items.map((subItem) => (
+                        {item.items?.map((subItem) => (
                           <SidebarMenuSubItem key={subItem.title}>
                             <SidebarMenuSubButton
                               isActive={pathname === subItem.url}
-                              render={<Link href={subItem.url} />}
+                              render={<Link href={subItem.url as any} />}
                             >
                               {subItem.title}
                             </SidebarMenuSubButton>
@@ -188,7 +187,7 @@ export function AdminSidebar({ session, ...props }: AdminSidebarProps) {
                   ) : (
                     <SidebarMenuButton
                       isActive={item.isActive}
-                      render={<Link href={item.url} className="font-medium" />}
+                      render={<Link href={item.url as any} className="font-medium" />}
                     >
                       {item.icon && <item.icon className="h-4 w-4 text-rose-500" />}
                       <span>{item.title}</span>
@@ -260,15 +259,10 @@ export function AdminSidebar({ session, ...props }: AdminSidebarProps) {
                 align="start"
                 className="w-56 bg-card border border-muted/60 rounded-xl p-1 shadow-2xl"
               >
-                <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground px-2 py-1.5">
-                  Tài khoản Admin
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
                 <DropdownMenuGroup>
-                  <DropdownMenuItem render={<Link href="/" className="flex items-center gap-2 cursor-pointer" />}>
-                    <Home className="h-4 w-4 text-muted-foreground" />
-                    <span>Trang chủ chính</span>
-                  </DropdownMenuItem>
+                  <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground px-2 py-1.5">
+                    Tài khoản Admin
+                  </DropdownMenuLabel>
                 </DropdownMenuGroup>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem

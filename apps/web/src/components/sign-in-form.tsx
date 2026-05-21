@@ -26,8 +26,17 @@ export default function SignInForm({ onSwitchToSignUp }: { onSwitchToSignUp: () 
           password: value.password,
         },
         {
-          onSuccess: () => {
-            router.push("/dashboard");
+          onSuccess: (ctx) => {
+            const user = ctx.data.user;
+            if (user) {
+              if (user.role === "admin") {
+                router.push(`/admin/${user.id}/dashboard` as any);
+              } else {
+                router.push(`/${user.id}` as any);
+              }
+            } else {
+              router.push("/");
+            }
             toast.success("Đăng nhập thành công");
           },
           onError: (error) => {

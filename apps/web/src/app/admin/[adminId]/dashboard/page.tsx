@@ -15,6 +15,7 @@ import {
   BookOpen,
 } from "lucide-react";
 import AdminDashboardActions from "./admin-dashboard-actions";
+import { AdminDashboardView } from "@/features/learning-content";
 import { CopyButton } from "@/components/copy-button";
 import { ModeToggle } from "@/components/mode-toggle";
 import {
@@ -70,10 +71,6 @@ export default async function AdminDashboardPage({ params }: PageProps) {
           <Breadcrumb>
             <BreadcrumbList>
               <BreadcrumbItem>
-                <BreadcrumbLink href="/">Trang chủ</BreadcrumbLink>
-              </BreadcrumbItem>
-              <BreadcrumbSeparator />
-              <BreadcrumbItem>
                 <BreadcrumbPage>Bảng Quản trị</BreadcrumbPage>
               </BreadcrumbItem>
             </BreadcrumbList>
@@ -81,6 +78,7 @@ export default async function AdminDashboardPage({ params }: PageProps) {
         </div>
         <div className="flex items-center gap-2">
           <ModeToggle />
+          <AdminDashboardActions />
         </div>
       </header>
 
@@ -181,93 +179,8 @@ export default async function AdminDashboardPage({ params }: PageProps) {
           </Card>
         </div>
 
-        {/* Main Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Detailed Admin Profile Card (Spans 2 cols) */}
-          <Card className="lg:col-span-2 bg-card/40 backdrop-blur-md border-muted p-6 flex flex-col gap-6">
-            <div className="flex items-center gap-2 pb-3 border-b border-muted">
-              <User className="h-5 w-5 text-rose-500" />
-              <h2 className="text-lg font-bold tracking-tight text-foreground">Thông tin cá nhân Admin</h2>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* ID Field */}
-              <div className="flex flex-col p-4 bg-muted/30 dark:bg-muted/10 rounded-2xl border border-muted/50 transition-all hover:bg-muted/50 dark:hover:bg-muted/20 relative group">
-                <span className="text-[10px] font-bold text-muted-foreground flex items-center gap-1.5 mb-1.5 uppercase tracking-wider">
-                  <Key className="h-3.5 w-3.5 text-rose-400" />
-                  Mã định danh Admin
-                </span>
-                <span className="font-mono text-xs break-all text-foreground select-all pr-8">
-                  {session.user.id}
-                </span>
-                <CopyButton value={session.user.id} className="absolute right-3 bottom-3" />
-              </div>
-
-              {/* Email Field */}
-              <div className="flex flex-col p-4 bg-muted/30 dark:bg-muted/10 rounded-2xl border border-muted/50 transition-all hover:bg-muted/50 dark:hover:bg-muted/20 relative group">
-                <span className="text-[10px] font-bold text-muted-foreground flex items-center gap-1.5 mb-1.5 uppercase tracking-wider">
-                  <Mail className="h-3.5 w-3.5 text-rose-400" />
-                  Email liên hệ
-                </span>
-                <span className="font-mono text-xs text-foreground pr-8 select-all">
-                  {session.user.email}
-                </span>
-                <CopyButton value={session.user.email} className="absolute right-3 bottom-3" />
-              </div>
-
-              {/* Registration Date */}
-              <div className="flex flex-col p-4 bg-muted/30 dark:bg-muted/10 rounded-2xl border border-muted/50 transition-all hover:bg-muted/50 dark:hover:bg-muted/20 md:col-span-2">
-                <span className="text-[10px] font-bold text-muted-foreground flex items-center gap-1.5 mb-1.5 uppercase tracking-wider">
-                  <Calendar className="h-3.5 w-3.5 text-rose-400" />
-                  Thời điểm kích hoạt tài khoản
-                </span>
-                <span className="text-sm font-semibold text-foreground">
-                  {new Date(session.user.createdAt).toLocaleDateString("vi-VN", {
-                    year: "numeric",
-                    month: "long",
-                    day: "numeric",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                    second: "2-digit",
-                  })}
-                </span>
-              </div>
-            </div>
-          </Card>
-
-          {/* Quick Actions Panel (Spans 1 col) */}
-          <Card className="bg-card/40 backdrop-blur-md border-muted p-6 flex flex-col justify-between gap-6">
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 pb-3 border-b border-muted">
-                <Activity className="h-5 w-5 text-rose-500" />
-                <h2 className="text-lg font-bold tracking-tight text-foreground">Tiện ích Quản trị</h2>
-              </div>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                Phím tắt thao tác nhanh dành cho vai trò quản trị viên cấp cao.
-              </p>
-
-              <div className="space-y-2">
-                <Link href="#" className="flex items-center justify-between p-3 rounded-xl bg-muted/30 hover:bg-muted/60 dark:bg-muted/10 dark:hover:bg-muted/20 border border-muted/50 text-xs font-semibold text-foreground transition-all duration-200 group">
-                  <span className="flex items-center gap-2">
-                    <Users className="h-4 w-4 text-rose-500 group-hover:scale-110 transition-transform" />
-                    Quản lý người dùng
-                  </span>
-                  <span className="text-[10px] text-muted-foreground group-hover:translate-x-1 transition-transform">→</span>
-                </Link>
-
-                <Link href="#" className="flex items-center justify-between p-3 rounded-xl bg-muted/30 hover:bg-muted/60 dark:bg-muted/10 dark:hover:bg-muted/20 border border-muted/50 text-xs font-semibold text-foreground transition-all duration-200 group">
-                  <span className="flex items-center gap-2">
-                    <BookOpen className="h-4 w-4 text-rose-500 group-hover:scale-110 transition-transform" />
-                    Quản lý khóa học
-                  </span>
-                  <span className="text-[10px] text-muted-foreground group-hover:translate-x-1 transition-transform">→</span>
-                </Link>
-              </div>
-            </div>
-
-            <AdminDashboardActions />
-          </Card>
-        </div>
+        {/* Minimal backend testing interface for Admin CMS */}
+        <AdminDashboardView />
       </div>
     </div>
   );

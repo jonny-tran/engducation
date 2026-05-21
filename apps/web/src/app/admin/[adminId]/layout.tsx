@@ -38,7 +38,7 @@ export default async function AdminLayout({ children, params }: LayoutProps) {
 
   return (
     <SidebarProvider>
-      <AdminSidebar session={session} />
+      <AdminSidebar session={session as any} />
       <SidebarInset className="bg-gradient-to-br from-slate-50 via-slate-100 to-rose-50/10 dark:from-slate-950 dark:via-slate-900 dark:to-rose-950/5 min-h-full">
         {children}
       </SidebarInset>

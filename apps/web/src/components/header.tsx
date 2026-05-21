@@ -7,15 +7,22 @@ import UserMenu from "./user-menu";
 
 export default function Header() {
   const pathname = usePathname();
-  const isAdminRoute = pathname?.startsWith("/admin");
+  const pathParts = pathname?.split("/").filter(Boolean) || [];
+  const isProfileRoute = pathParts.length === 1 && !["dashboard", "admin", "login"].includes(pathParts[0]);
 
-  if (isAdminRoute) {
+  const shouldHideHeader =
+    pathname === "/" ||
+    pathname?.startsWith("/admin") ||
+    pathname?.startsWith("/dashboard") ||
+    pathname?.startsWith("/login") ||
+    isProfileRoute;
+
+  if (shouldHideHeader) {
     return null;
   }
 
   const links = [
     { to: "/", label: "Home" },
-    { to: "/dashboard", label: "Dashboard" },
   ] as const;
 
 

@@ -4,7 +4,7 @@ import { Button } from "@engducation/ui/components/button";
 import { authClient } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { LogOut, Home } from "lucide-react";
+import { LogOut } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -30,12 +30,6 @@ export default function UserProfileActions() {
 
   return (
     <div className="flex flex-wrap gap-3 justify-end mt-6">
-      <Link href="/">
-        <Button variant="outline" className="flex items-center gap-2 hover:bg-muted transition-colors">
-          <Home className="h-4 w-4" />
-          Trang chủ
-        </Button>
-      </Link>
       <Button
         variant="destructive"
         disabled={isLoggingOut}

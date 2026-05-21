@@ -560,6 +560,39 @@ export const adminContentRouter = router({
       return { deleted: true };
     }),
 
+  courseGetDetail: adminProcedure
+    .input(z.object({ courseId: z.string().min(1) }))
+    .query(async ({ ctx, input }) => {
+      const { courseId } = input;
+      const course = await ctx.db.query.courses.findFirst({
+        where: eq(courses.id, courseId),
+        with: {
+          lessons: {
+            orderBy: [asc(lessons.order)],
+            with: {
+              quiz: {
+                with: {
+                  questions: {
+                    orderBy: [asc(questions.order)],
+                    with: { answers: true },
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      if (!course) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Khóa học không tồn tại",
+        });
+      }
+
+      return course;
+    }),
+
   // ─── DASHBOARD STATS ──────────────────────────────────────
 
   dashboardStats: adminProcedure.query(async ({ ctx }) => {
@@ -591,3 +624,4 @@ export const adminContentRouter = router({
     };
   }),
 });
+
