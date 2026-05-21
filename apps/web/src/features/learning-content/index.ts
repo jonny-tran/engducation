@@ -15,4 +15,7 @@ export { AdminVocabularyManager } from "./components/admin-vocabulary-manager";
 export { LessonPlayer } from "./components/lesson-player";
 export { QuizEngine } from "./components/quiz-engine";
 export { StudentWelcomeView } from "./components/student-welcome-view";
+export { VocabularyCard } from "./components/vocabulary-card";
+export { StudentVocabularyView } from "./components/student-vocabulary-view";
+export { StudentNotebookView } from "./components/student-notebook-view";
 

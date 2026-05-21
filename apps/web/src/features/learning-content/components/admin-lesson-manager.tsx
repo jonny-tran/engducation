@@ -251,15 +251,17 @@ export function AdminLessonManager({ courseId, lessons, onSelectLessonForQuiz }:
 
                           {/* Delete with Shadcn AlertDialog */}
                           <AlertDialog>
-                            <AlertDialogTrigger>
-                              <Button
-                                variant="destructive"
-                                className="px-1.5 py-0.5 h-6 text-[10px] font-bold"
-                                onClick={() => setDeleteTargetId(lesson.id)}
-                              >
-                                XÓA
-                              </Button>
-                            </AlertDialogTrigger>
+                            <AlertDialogTrigger
+                              render={
+                                <Button
+                                  variant="destructive"
+                                  className="px-1.5 py-0.5 h-6 text-[10px] font-bold"
+                                  onClick={() => setDeleteTargetId(lesson.id)}
+                                >
+                                  XÓA
+                                </Button>
+                              }
+                            />
                             <AlertDialogContent>
                               <AlertDialogHeader>
                                 <AlertDialogTitle>Xác nhận xóa bài học</AlertDialogTitle>

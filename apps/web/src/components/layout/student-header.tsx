@@ -18,6 +18,8 @@ export function StudentHeader() {
     if (pathname?.startsWith("/courses/")) return "Chi tiết khóa học";
     if (pathname?.endsWith("/quiz")) return "Làm bài tập Quiz";
     if (pathname?.startsWith("/lessons/")) return "Phát bài giảng";
+    if (pathname === "/vocabulary") return "Từ điển hệ thống";
+    if (pathname === "/vocabulary/my-notebook") return "Sổ tay từ vựng";
     return "Lớp học";
   };
 
@@ -47,6 +49,14 @@ export function StudentHeader() {
             Khóa học
           </Button>
         </Link>
+        
+        <Link href="/vocabulary">
+          <Button variant="ghost" size="sm" className={`h-8 font-bold text-xs rounded-xl ${pathname?.startsWith("/vocabulary") ? "bg-accent text-accent-foreground font-extrabold" : "hover:bg-accent/50"}`}>
+            <BookOpen className="mr-1.5 h-3.5 w-3.5 text-amber-500" />
+            Từ vựng
+          </Button>
+        </Link>
+
         {session?.user && (
           <Link href={`/${session.user.id}` as any}>
             <Button variant="ghost" size="sm" className={`h-8 font-bold text-xs rounded-xl ${pathname === `/${session.user.id}` ? "bg-accent text-accent-foreground font-extrabold" : "hover:bg-accent/50"}`}>

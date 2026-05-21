@@ -1,12 +1,16 @@
 import { env } from "@engducation/env/server";
-import { neon } from "@neondatabase/serverless";
-import { drizzle } from "drizzle-orm/neon-http";
+import { Pool, neonConfig } from "@neondatabase/serverless";
+import { drizzle } from "drizzle-orm/neon-serverless";
+import ws from "ws";
+
+// Set WebSocket constructor for Node.js environments
+neonConfig.webSocketConstructor = ws;
 
 import * as schema from "./schema";
 
 export function createDb() {
-  const sql = neon(env.DATABASE_URL);
-  return drizzle(sql, { schema });
+  const pool = new Pool({ connectionString: env.DATABASE_URL });
+  return drizzle(pool, { schema });
 }
 
 export const db = createDb();
