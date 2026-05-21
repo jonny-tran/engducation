@@ -1,7 +1,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
-import { AdminSidebar } from "@/components/admin-sidebar";
+import { AdminSidebar } from "@/components/layout/admin-sidebar";
 import {
   SidebarInset,
   SidebarProvider,

@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 import { StudentDashboardView } from "@/features/learning-content";
 import UserProfileActions from "./user-profile-actions";
-import { ModeToggle } from "@/components/mode-toggle";
+import { ModeToggle } from "@/components/ui/mode-toggle";
 
 interface PageProps {
   params: Promise<{ userId: string }>;

@@ -16,8 +16,8 @@ import {
 } from "lucide-react";
 import AdminDashboardActions from "./admin-dashboard-actions";
 import { AdminDashboardView } from "@/features/learning-content";
-import { CopyButton } from "@/components/copy-button";
-import { ModeToggle } from "@/components/mode-toggle";
+import { CopyButton } from "@/components/ui/copy-button";
+import { ModeToggle } from "@/components/ui/mode-toggle";
 import {
   Breadcrumb,
   BreadcrumbItem,
