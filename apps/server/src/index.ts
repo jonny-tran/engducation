@@ -571,12 +571,13 @@ async function start() {
     })
     .use(
       swagger({
+        provider: "scalar",
         path: "/swagger",
         documentation: MERGED_SPEC as unknown as object,
         exclude: ["/trpc", "/trpc/*", ...tRPCPaths],
-        swaggerOptions: {
-          withCredentials: true,
-          persistAuthorization: true,
+        scalarConfig: {
+          theme: "deepSpace",
+          layout: "modern",
         },
       }),
     )

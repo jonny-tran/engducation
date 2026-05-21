@@ -1,14 +1,23 @@
 "use client";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 import { ModeToggle } from "./mode-toggle";
 import UserMenu from "./user-menu";
 
 export default function Header() {
+  const pathname = usePathname();
+  const isAdminRoute = pathname?.startsWith("/admin");
+
+  if (isAdminRoute) {
+    return null;
+  }
+
   const links = [
     { to: "/", label: "Home" },
     { to: "/dashboard", label: "Dashboard" },
   ] as const;
+
 
   return (
     <div>

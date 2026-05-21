@@ -1,27 +1,55 @@
-import { headers } from "next/headers";
-import { redirect } from "next/navigation";
+import { AppSidebar } from "@/components/app-sidebar"
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@engducation/ui/components/breadcrumb"
+import { Separator } from "@engducation/ui/components/separator"
+import {
+  SidebarInset,
+  SidebarProvider,
+  SidebarTrigger,
+} from "@engducation/ui/components/sidebar"
 
-import { authClient } from "@/lib/auth-client";
-
-import Dashboard from "./dashboard";
-
-export default async function DashboardPage() {
-  const session = await authClient.getSession({
-    fetchOptions: {
-      headers: await headers(),
-      throw: true,
-    },
-  });
-
-  if (!session?.user) {
-    redirect("/login");
-  }
-
+export default function Page() {
   return (
-    <div>
-      <h1>Dashboard</h1>
-      <p>Welcome {session.user.name}</p>
-      <Dashboard session={session} />
-    </div>
-  );
+    <SidebarProvider>
+      <AppSidebar />
+      <SidebarInset>
+        <header className="flex h-16 shrink-0 items-center gap-2 border-b">
+          <div className="flex items-center gap-2 px-3">
+            <SidebarTrigger />
+            <Separator
+              orientation="vertical"
+              className="mr-2 data-vertical:h-4 data-vertical:self-auto"
+            />
+            <Breadcrumb>
+              <BreadcrumbList>
+                <BreadcrumbItem className="hidden md:block">
+                  <BreadcrumbLink href="#">
+                    Build Your Application
+                  </BreadcrumbLink>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator className="hidden md:block" />
+                <BreadcrumbItem>
+                  <BreadcrumbPage>Data Fetching</BreadcrumbPage>
+                </BreadcrumbItem>
+              </BreadcrumbList>
+            </Breadcrumb>
+          </div>
+        </header>
+        <div className="flex flex-1 flex-col gap-4 p-4">
+          <div className="grid auto-rows-min gap-4 md:grid-cols-3">
+            <div className="aspect-video rounded-xl bg-muted/50" />
+            <div className="aspect-video rounded-xl bg-muted/50" />
+            <div className="aspect-video rounded-xl bg-muted/50" />
+          </div>
+          <div className="min-h-[100vh] flex-1 rounded-xl bg-muted/50 md:min-h-min" />
+        </div>
+      </SidebarInset>
+    </SidebarProvider>
+  )
 }
