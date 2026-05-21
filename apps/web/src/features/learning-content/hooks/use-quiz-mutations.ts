@@ -5,18 +5,25 @@ import { toast } from "sonner";
 export function useQuizMutations(courseId?: string) {
   const queryClient = useQueryClient();
 
+  const invalidateQuizQueries = () => {
+    if (courseId) {
+      queryClient.invalidateQueries({
+        queryKey: trpc.admin.courseGetDetail.queryKey({ courseId }),
+      });
+    }
+    queryClient.invalidateQueries({
+      queryKey: trpc.admin.dashboardStats.queryKey(),
+    });
+  };
+
   const upsertQuizStructure = useMutation(
     trpc.admin.quizUpsertStructure.mutationOptions({
       onSuccess: () => {
         toast.success("Cập nhật cấu trúc bài tập thành công");
-        if (courseId) {
-          queryClient.invalidateQueries({
-            queryKey: trpc.admin.courseGetDetail.queryKey({ courseId }),
-          });
-        }
+        invalidateQuizQueries();
       },
       onError: (err) => {
-        toast.error(`Lỗi cập nhật bài tập: ${err.message}`);
+        toast.error(err.message);
       },
     })
   );
@@ -25,14 +32,10 @@ export function useQuizMutations(courseId?: string) {
     trpc.admin.createQuizQuestion.mutationOptions({
       onSuccess: () => {
         toast.success("Thêm câu hỏi thành công");
-        if (courseId) {
-          queryClient.invalidateQueries({
-            queryKey: trpc.admin.courseGetDetail.queryKey({ courseId }),
-          });
-        }
+        invalidateQuizQueries();
       },
       onError: (err) => {
-        toast.error(`Lỗi thêm câu hỏi: ${err.message}`);
+        toast.error(err.message);
       },
     })
   );
@@ -41,14 +44,10 @@ export function useQuizMutations(courseId?: string) {
     trpc.admin.quizDelete.mutationOptions({
       onSuccess: () => {
         toast.success("Xóa bài tập thành công");
-        if (courseId) {
-          queryClient.invalidateQueries({
-            queryKey: trpc.admin.courseGetDetail.queryKey({ courseId }),
-          });
-        }
+        invalidateQuizQueries();
       },
       onError: (err) => {
-        toast.error(`Lỗi xóa bài tập: ${err.message}`);
+        toast.error(err.message);
       },
     })
   );

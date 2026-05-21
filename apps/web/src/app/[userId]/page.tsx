@@ -1,7 +1,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
-import { StudentDashboardView } from "@/features/learning-content";
+import { StudentWelcomeView } from "@/features/learning-content";
 import UserProfileActions from "./user-profile-actions";
 import { ModeToggle } from "@/components/ui/mode-toggle";
 
@@ -53,8 +53,9 @@ export default async function UserProfilePage({ params }: PageProps) {
 
       {/* Centered spacious classroom space */}
       <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <StudentDashboardView />
+        <StudentWelcomeView userName={session.user.name ?? "Học viên"} />
       </main>
     </div>
   );
 }
+

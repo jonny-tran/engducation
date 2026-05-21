@@ -12,9 +12,12 @@ export function useCourseMutations() {
         queryClient.invalidateQueries({
           queryKey: trpc.admin.courseList.queryKey(),
         });
+        queryClient.invalidateQueries({
+          queryKey: trpc.admin.dashboardStats.queryKey(),
+        });
       },
       onError: (err) => {
-        toast.error(`Lỗi tạo khóa học: ${err.message}`);
+        toast.error(err.message);
       },
     })
   );
@@ -28,11 +31,16 @@ export function useCourseMutations() {
         });
       },
       onError: (err) => {
-        toast.error(`Lỗi cập nhật khóa học: ${err.message}`);
+        toast.error(err.message);
       },
     })
   );
 
+  /**
+   * deleteCourse handles PRECONDITION_FAILED (412) specifically.
+   * When a course has lessons attached, the backend blocks the deletion
+   * and returns a message that includes the lesson count.
+   */
   const deleteCourse = useMutation(
     trpc.admin.courseDelete.mutationOptions({
       onSuccess: () => {
@@ -40,9 +48,17 @@ export function useCourseMutations() {
         queryClient.invalidateQueries({
           queryKey: trpc.admin.courseList.queryKey(),
         });
+        queryClient.invalidateQueries({
+          queryKey: trpc.admin.dashboardStats.queryKey(),
+        });
       },
       onError: (err) => {
-        toast.error(`Lỗi xóa khóa học: ${err.message}`);
+        const code = (err as { data?: { code?: string } }).data?.code;
+        if (code === "PRECONDITION_FAILED") {
+          toast.error(err.message);
+        } else {
+          toast.error(err.message);
+        }
       },
     })
   );

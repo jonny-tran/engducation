@@ -72,31 +72,29 @@ export function AdminSidebar({ session, ...props }: AdminSidebarProps) {
       },
       {
         title: "Quản lý đào tạo",
-        url: "#",
+        url: `/admin/${adminId}/courses`,
         icon: BookOpen,
+        isActive: pathname.startsWith(`/admin/${adminId}/courses`),
         items: [
           {
             title: "Khóa học",
-            url: "#",
-          },
-          {
-            title: "Bài học",
-            url: "#",
+            url: `/admin/${adminId}/courses`,
           },
         ],
       },
       {
         title: "Hệ thống",
-        url: "#",
+        url: `/admin/${adminId}/settings`,
         icon: Settings,
+        isActive: pathname.startsWith(`/admin/${adminId}/settings`) || pathname.startsWith(`/admin/${adminId}/users`),
         items: [
           {
             title: "Người dùng",
-            url: "#",
+            url: `/admin/${adminId}/users`,
           },
           {
             title: "Cấu hình chung",
-            url: "#",
+            url: `/admin/${adminId}/settings`,
           },
         ],
       },

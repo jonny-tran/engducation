@@ -5,21 +5,28 @@ import { toast } from "sonner";
 export function useLessonMutations(courseId?: string) {
   const queryClient = useQueryClient();
 
+  const invalidateLessonQueries = () => {
+    if (courseId) {
+      queryClient.invalidateQueries({
+        queryKey: trpc.admin.courseGetDetail.queryKey({ courseId }),
+      });
+    }
+    queryClient.invalidateQueries({
+      queryKey: trpc.admin.courseList.queryKey(),
+    });
+    queryClient.invalidateQueries({
+      queryKey: trpc.admin.dashboardStats.queryKey(),
+    });
+  };
+
   const createLesson = useMutation(
     trpc.admin.lessonCreate.mutationOptions({
       onSuccess: () => {
         toast.success("Tạo bài học thành công");
-        if (courseId) {
-          queryClient.invalidateQueries({
-            queryKey: trpc.admin.courseGetDetail.queryKey({ courseId }),
-          });
-        }
-        queryClient.invalidateQueries({
-          queryKey: trpc.admin.courseList.queryKey(),
-        });
+        invalidateLessonQueries();
       },
       onError: (err) => {
-        toast.error(`Lỗi tạo bài học: ${err.message}`);
+        toast.error(err.message);
       },
     })
   );
@@ -28,17 +35,10 @@ export function useLessonMutations(courseId?: string) {
     trpc.admin.lessonUpdate.mutationOptions({
       onSuccess: () => {
         toast.success("Cập nhật bài học thành công");
-        if (courseId) {
-          queryClient.invalidateQueries({
-            queryKey: trpc.admin.courseGetDetail.queryKey({ courseId }),
-          });
-        }
-        queryClient.invalidateQueries({
-          queryKey: trpc.admin.courseList.queryKey(),
-        });
+        invalidateLessonQueries();
       },
       onError: (err) => {
-        toast.error(`Lỗi cập nhật bài học: ${err.message}`);
+        toast.error(err.message);
       },
     })
   );
@@ -47,17 +47,10 @@ export function useLessonMutations(courseId?: string) {
     trpc.admin.lessonDelete.mutationOptions({
       onSuccess: () => {
         toast.success("Xóa bài học thành công");
-        if (courseId) {
-          queryClient.invalidateQueries({
-            queryKey: trpc.admin.courseGetDetail.queryKey({ courseId }),
-          });
-        }
-        queryClient.invalidateQueries({
-          queryKey: trpc.admin.courseList.queryKey(),
-        });
+        invalidateLessonQueries();
       },
       onError: (err) => {
-        toast.error(`Lỗi xóa bài học: ${err.message}`);
+        toast.error(err.message);
       },
     })
   );
@@ -73,7 +66,12 @@ export function useLessonMutations(courseId?: string) {
         }
       },
       onError: (err) => {
-        toast.error(`Lỗi sắp xếp bài học: ${err.message}`);
+        const code = (err as { data?: { code?: string } }).data?.code;
+        if (code === "BAD_REQUEST") {
+          toast.error(err.message);
+        } else {
+          toast.error(`Lỗi sắp xếp bài học: ${err.message}`);
+        }
       },
     })
   );

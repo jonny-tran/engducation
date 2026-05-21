@@ -14,6 +14,7 @@ interface LessonPlayerProps {
     videoPublicId: string | null;
     videoUrl: string | null;
     progressStatus: "learning" | "completed" | null;
+    hasQuiz?: boolean;
   };
   onTakeQuiz: () => void;
 }
@@ -21,15 +22,31 @@ interface LessonPlayerProps {
 export function LessonPlayer({ courseId, lesson, onTakeQuiz }: LessonPlayerProps) {
   const { trackProgress, getMediaUrl } = useStudentLearning(courseId);
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
+  const [expiresAt, setExpiresAt] = useState<Date | null>(null);
   const [isLoadingVideo, setIsLoadingVideo] = useState(false);
   const trackingInitiated = useRef<string | null>(null);
 
   const isVideo = lesson.videoPublicId || lesson.videoUrl;
 
+  // Helper to fetch Signed URL
+  const fetchSignedUrl = () => {
+    setIsLoadingVideo(true);
+    getMediaUrl.mutateAsync({ lessonId: lesson.id })
+      .then((data) => {
+        setSignedUrl(data.url);
+        setExpiresAt(new Date(data.expiresAt));
+        setIsLoadingVideo(false);
+      })
+      .catch(() => {
+        setIsLoadingVideo(false);
+      });
+  };
+
   // Track page mount / lesson switch
   useEffect(() => {
-    // Reset signed URL
+    // Reset states
     setSignedUrl(null);
+    setExpiresAt(null);
     setIsLoadingVideo(false);
 
     // Call IN_PROGRESS tracking on page mount/change for this lesson
@@ -43,17 +60,41 @@ export function LessonPlayer({ courseId, lesson, onTakeQuiz }: LessonPlayerProps
 
     // If it's a video lesson, immediately fetch Cloudinary Signed URL
     if (isVideo) {
-      setIsLoadingVideo(true);
+      fetchSignedUrl();
+    }
+  }, [lesson.id]);
+
+  // Background timer to re-fetch URL 3 minutes before expiration (1 hour limit)
+  useEffect(() => {
+    if (!expiresAt || !signedUrl || !isVideo) return;
+
+    const timeUntilExpiry = expiresAt.getTime() - Date.now();
+    // Schedule refresh 3 minutes (180,000ms) before actual expiration
+    const refreshDelay = Math.max(0, timeUntilExpiry - 180000);
+
+    const timer = setTimeout(() => {
       getMediaUrl.mutateAsync({ lessonId: lesson.id })
         .then((data) => {
           setSignedUrl(data.url);
-          setIsLoadingVideo(false);
+          setExpiresAt(new Date(data.expiresAt));
         })
-        .catch(() => {
-          setIsLoadingVideo(false);
+        .catch((err) => {
+          console.error("Failed to background refresh signed URL:", err);
         });
-    }
-  }, [lesson.id]);
+    }, refreshDelay);
+
+    return () => clearTimeout(timer);
+  }, [expiresAt, signedUrl, lesson.id]);
+
+  // Recover from playback failures (interruption / sudden expiration)
+  const handleVideoError = () => {
+    console.warn("Video playback failure or interruption. Re-fetching Signed URL...");
+    getMediaUrl.mutateAsync({ lessonId: lesson.id })
+      .then((data) => {
+        setSignedUrl(data.url);
+        setExpiresAt(new Date(data.expiresAt));
+      });
+  };
 
   const handleVideoPlay = () => {
     // Double safeguard to track in progress when playback actually starts
@@ -126,6 +167,7 @@ export function LessonPlayer({ courseId, lesson, onTakeQuiz }: LessonPlayerProps
                   controls
                   onPlay={handleVideoPlay}
                   onEnded={handleVideoEnded}
+                  onError={handleVideoError}
                   className="w-full h-full object-contain"
                 />
               ) : (
@@ -170,13 +212,24 @@ export function LessonPlayer({ courseId, lesson, onTakeQuiz }: LessonPlayerProps
             )}
           </div>
 
-          <Button
-            onClick={onTakeQuiz}
-            variant="default"
-            className="text-xs font-bold px-4"
-          >
-            LÀM BÀI TẬP TRẮC NGHIỆM (TAKE QUIZ) ✍️
-          </Button>
+          {lesson.hasQuiz && (
+            <Button
+              onClick={onTakeQuiz}
+              disabled={lesson.progressStatus !== "completed"}
+              variant={lesson.progressStatus === "completed" ? "default" : "outline"}
+              className={`text-xs font-bold px-4 transition-all duration-500 rounded-xl ${
+                lesson.progressStatus === "completed"
+                  ? "bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-500/20 scale-100 hover:scale-[1.03] active:scale-[0.98]"
+                  : "opacity-40 cursor-not-allowed border-dashed text-muted-foreground select-none"
+              }`}
+            >
+              {lesson.progressStatus === "completed" ? (
+                "LÀM BÀI TẬP TRẮC NGHIỆM (QUIZ) ✍️"
+              ) : (
+                "🔒 XEM HẾT VIDEO ĐỂ MỞ KHÓA QUIZ"
+              )}
+            </Button>
+          )}
         </div>
       </CardContent>
     </Card>

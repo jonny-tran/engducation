@@ -1,11 +1,25 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLessonMutations } from "../hooks/use-lesson-mutations";
+import { useCloudinaryUpload } from "../hooks/use-cloudinary-upload";
 import { Button } from "@engducation/ui/components/button";
 import { Input } from "@engducation/ui/components/input";
 import { Textarea } from "@engducation/ui/components/textarea";
 import { Card, CardHeader, CardTitle, CardContent } from "@engducation/ui/components/card";
 import { Badge } from "@engducation/ui/components/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@engducation/ui/components/alert-dialog";
+import { Progress } from "@engducation/ui/components/progress";
+import { Upload, X } from "lucide-react";
 
 interface LessonData {
   id: string;
@@ -26,7 +40,9 @@ interface AdminLessonManagerProps {
 
 export function AdminLessonManager({ courseId, lessons, onSelectLessonForQuiz }: AdminLessonManagerProps) {
   const { createLesson, updateLesson, deleteLesson, reorderLessons } = useLessonMutations(courseId);
+  const { upload } = useCloudinaryUpload();
   const [editingLessonId, setEditingLessonId] = useState<string | null>(null);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
 
   // Form State
   const [title, setTitle] = useState("");
@@ -36,6 +52,11 @@ export function AdminLessonManager({ courseId, lessons, onSelectLessonForQuiz }:
   const [videoUrl, setVideoUrl] = useState("");
   const [status, setStatus] = useState<"draft" | "published" | "archived">("draft");
   const [orderInput, setOrderInput] = useState<string>("");
+
+  // Cloudinary upload state
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     resetForm();
@@ -50,6 +71,8 @@ export function AdminLessonManager({ courseId, lessons, onSelectLessonForQuiz }:
     setStatus("draft");
     setOrderInput("");
     setEditingLessonId(null);
+    setUploadProgress(null);
+    setIsUploading(false);
   };
 
   const handleEditClick = (lesson: LessonData) => {
@@ -59,8 +82,48 @@ export function AdminLessonManager({ courseId, lessons, onSelectLessonForQuiz }:
     setLessonType(lesson.videoUrl || lesson.videoPublicId ? "VIDEO" : "TEXT");
     setVideoPublicId(lesson.videoPublicId ?? "");
     setVideoUrl(lesson.videoUrl ?? "");
-    setStatus(lesson.status as any);
+    setStatus(lesson.status as "draft" | "published" | "archived");
     setOrderInput(lesson.order.toString());
+    setUploadProgress(null);
+    setIsUploading(false);
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("video/")) {
+      alert("Vui lòng chọn tệp video hợp lệ");
+      return;
+    }
+
+    if (file.size > 500 * 1024 * 1024) {
+      alert("Tệp video quá lớn (tối đa 500MB)");
+      return;
+    }
+
+    setIsUploading(true);
+    setUploadProgress(0);
+
+    try {
+      const result = await upload.mutateAsync({
+        file,
+        onProgress: (progress) => {
+          setUploadProgress(Math.round((progress.loaded / progress.total) * 100));
+        },
+      });
+      setVideoPublicId(result.publicId);
+      setVideoUrl(result.secureUrl);
+      setUploadProgress(100);
+    } catch {
+      // Error is already toasted by the hook
+    } finally {
+      setIsUploading(false);
+    }
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -70,8 +133,8 @@ export function AdminLessonManager({ courseId, lessons, onSelectLessonForQuiz }:
     const payload = {
       title,
       description: description || undefined,
-      videoPublicId: lessonType === "VIDEO" ? videoPublicId || undefined : null as any,
-      videoUrl: lessonType === "VIDEO" ? videoUrl || undefined : null as any,
+      videoPublicId: lessonType === "VIDEO" ? (videoPublicId || undefined) : undefined,
+      videoUrl: lessonType === "VIDEO" ? (videoUrl || undefined) : undefined,
       status,
       order: orderInput ? parseInt(orderInput, 10) : undefined,
     };
@@ -90,10 +153,10 @@ export function AdminLessonManager({ courseId, lessons, onSelectLessonForQuiz }:
     resetForm();
   };
 
-  const handleDelete = async (id: string) => {
-    if (confirm("Bạn có chắc chắn muốn xóa bài học này?")) {
-      await deleteLesson.mutateAsync({ id });
-    }
+  const confirmDelete = async () => {
+    if (!deleteTargetId) return;
+    await deleteLesson.mutateAsync({ id: deleteTargetId });
+    setDeleteTargetId(null);
   };
 
   const handleMove = async (index: number, direction: "UP" | "DOWN") => {
@@ -103,15 +166,11 @@ export function AdminLessonManager({ courseId, lessons, onSelectLessonForQuiz }:
     const currentLesson = lessons[index]!;
     const adjacentLesson = lessons[targetIndex]!;
 
-    // Swap their order numbers
-    const currentOrder = currentLesson.order;
-    const adjacentOrder = adjacentLesson.order;
-
     await reorderLessons.mutateAsync({
       courseId,
       movements: [
-        { id: currentLesson.id, order: adjacentOrder },
-        { id: adjacentLesson.id, order: currentOrder },
+        { id: currentLesson.id, order: adjacentLesson.order },
+        { id: adjacentLesson.id, order: currentLesson.order },
       ],
     });
   };
@@ -189,16 +248,44 @@ export function AdminLessonManager({ courseId, lessons, onSelectLessonForQuiz }:
                           >
                             SỬA
                           </Button>
-                          <Button
-                            variant="destructive"
-                            onClick={() => handleDelete(lesson.id)}
-                            className="px-1.5 py-0.5 h-6 text-[10px] font-bold"
-                          >
-                            XÓA
-                          </Button>
+
+                          {/* Delete with Shadcn AlertDialog */}
+                          <AlertDialog>
+                            <AlertDialogTrigger>
+                              <Button
+                                variant="destructive"
+                                className="px-1.5 py-0.5 h-6 text-[10px] font-bold"
+                                onClick={() => setDeleteTargetId(lesson.id)}
+                              >
+                                XÓA
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Xác nhận xóa bài học</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Bạn có chắc chắn muốn xóa bài học{" "}
+                                  <strong>&ldquo;{lesson.title}&rdquo;</strong>? Hành động này sẽ xóa toàn bộ bài tập gắn
+                                  với bài học này và không thể hoàn tác.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel onClick={() => setDeleteTargetId(null)}>
+                                  Hủy
+                                </AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={confirmDelete}
+                                  disabled={deleteLesson.isPending}
+                                >
+                                  {deleteLesson.isPending ? "Đang xóa..." : "Xóa bài học"}
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+
                           <Button
                             variant="outline"
-                            disabled={index === 0}
+                            disabled={index === 0 || reorderLessons.isPending}
                             onClick={() => handleMove(index, "UP")}
                             className="px-1.5 py-0.5 h-6 text-[10px]"
                           >
@@ -206,7 +293,7 @@ export function AdminLessonManager({ courseId, lessons, onSelectLessonForQuiz }:
                           </Button>
                           <Button
                             variant="outline"
-                            disabled={index === lessons.length - 1}
+                            disabled={index === lessons.length - 1 || reorderLessons.isPending}
                             onClick={() => handleMove(index, "DOWN")}
                             className="px-1.5 py-0.5 h-6 text-[10px]"
                           >
@@ -264,7 +351,7 @@ export function AdminLessonManager({ courseId, lessons, onSelectLessonForQuiz }:
                 <label className="font-bold uppercase text-muted-foreground">Loại bài học</label>
                 <select
                   value={lessonType}
-                  onChange={(e) => setLessonType(e.target.value as any)}
+                  onChange={(e) => setLessonType(e.target.value as "TEXT" | "VIDEO")}
                   className="flex h-8 w-full border border-input bg-background px-2.5 py-1 text-xs text-foreground shadow-sm transition-colors outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50 disabled:opacity-50 dark:bg-input/30"
                 >
                   <option value="TEXT">Bài học đọc (TEXT)</option>
@@ -283,29 +370,97 @@ export function AdminLessonManager({ courseId, lessons, onSelectLessonForQuiz }:
               </div>
             </div>
 
+            {/* VIDEO UPLOAD SECTION */}
             {lessonType === "VIDEO" && (
               <div className="p-3 border border-dashed border-border bg-muted/30 space-y-2 rounded-md">
-                <div className="flex flex-col gap-1">
-                  <label className="font-bold uppercase text-muted-foreground text-[10px]">Cloudinary Public ID *</label>
-                  <Input
-                    required={lessonType === "VIDEO"}
-                    value={videoPublicId}
-                    onChange={(e) => setVideoPublicId(e.target.value)}
-                    placeholder="ví dụ: courses/intro_video"
-                    className="h-8 text-xs"
-                  />
+                <div className="flex flex-col gap-1.5">
+                  <label className="font-bold uppercase text-muted-foreground text-[10px]">
+                    Video bài giảng
+                  </label>
+
+                  {/* Show current video info if editing */}
+                  {videoPublicId && !isUploading && (
+                    <div className="flex items-center justify-between bg-emerald-500/10 border border-emerald-500/20 rounded px-2 py-1.5 text-[10px]">
+                      <span className="text-emerald-600 dark:text-emerald-400 truncate flex-1">
+                        {videoPublicId}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setVideoPublicId("");
+                          setVideoUrl("");
+                        }}
+                        className="text-muted-foreground hover:text-destructive ml-2 shrink-0"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Upload progress */}
+                  {isUploading && (
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <Upload className="h-3 w-3 animate-pulse" />
+                          Đang upload lên Cloudinary...
+                        </span>
+                        <span>{uploadProgress}%</span>
+                      </div>
+                      <Progress value={uploadProgress ?? 0} className="h-1.5" />
+                    </div>
+                  )}
+
+                  {/* Upload button */}
+                  {!isUploading && !videoPublicId && (
+                    <>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="video/*"
+                        onChange={handleFileChange}
+                        className="hidden"
+                        id="video-upload"
+                      />
+                      <label
+                        htmlFor="video-upload"
+                        className="flex items-center justify-center gap-2 h-8 border border-border bg-background hover:bg-muted cursor-pointer rounded text-[10px] font-bold transition-colors"
+                      >
+                        <Upload className="h-3 w-3" />
+                        Chọn tệp video
+                      </label>
+                      <p className="text-[9px] text-muted-foreground text-center">
+                        Tối đa 500MB. Video sẽ được upload trực tiếp lên Cloudinary.
+                      </p>
+                    </>
+                  )}
                 </div>
-                <div className="flex flex-col gap-1">
-                  <label className="font-bold uppercase text-muted-foreground text-[10px]">Cloudinary Video URL *</label>
-                  <Input
-                    required={lessonType === "VIDEO"}
-                    type="url"
-                    value={videoUrl}
-                    onChange={(e) => setVideoUrl(e.target.value)}
-                    placeholder="https://res.cloudinary.com/..."
-                    className="h-8 text-xs"
-                  />
-                </div>
+
+                {/* Hidden fields populated after upload */}
+                {videoPublicId && (
+                  <>
+                    <div className="flex flex-col gap-1">
+                      <label className="font-bold uppercase text-muted-foreground text-[10px]">
+                        Cloudinary Public ID
+                      </label>
+                      <Input
+                        value={videoPublicId}
+                        readOnly
+                        className="h-7 text-[10px] bg-muted/30"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="font-bold uppercase text-muted-foreground text-[10px]">
+                        Cloudinary Video URL
+                      </label>
+                      <Input
+                        value={videoUrl}
+                        readOnly
+                        className="h-7 text-[10px] bg-muted/30 truncate"
+                      />
+                    </div>
+                  </>
+                )}
               </div>
             )}
 
@@ -313,7 +468,7 @@ export function AdminLessonManager({ courseId, lessons, onSelectLessonForQuiz }:
               <label className="font-bold uppercase text-muted-foreground">Trạng thái (Status)</label>
               <select
                 value={status}
-                onChange={(e) => setStatus(e.target.value as any)}
+                onChange={(e) => setStatus(e.target.value as "draft" | "published" | "archived")}
                 className="flex h-8 w-full border border-input bg-background px-2.5 py-1 text-xs text-foreground shadow-sm transition-colors outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50 disabled:opacity-50 dark:bg-input/30"
               >
                 <option value="draft">DRAFT (Bản nháp)</option>
@@ -335,11 +490,15 @@ export function AdminLessonManager({ courseId, lessons, onSelectLessonForQuiz }:
               )}
               <Button
                 type="submit"
-                disabled={createLesson.isPending || updateLesson.isPending}
+                disabled={createLesson.isPending || updateLesson.isPending || isUploading}
                 variant="default"
                 className="font-bold"
               >
-                {createLesson.isPending || updateLesson.isPending ? "ĐANG LƯU..." : editingLessonId ? "CẬP NHẬT" : "THÊM MỚI"}
+                {createLesson.isPending || updateLesson.isPending
+                  ? "ĐANG LƯU..."
+                  : editingLessonId
+                  ? "CẬP NHẬT"
+                  : "THÊM MỚI"}
               </Button>
             </div>
           </form>
