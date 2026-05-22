@@ -55,10 +55,10 @@ export function useLessonMutations(courseId?: string) {
     })
   );
 
-  const reorderLessons = useMutation(
-    trpc.admin.lessonReorder.mutationOptions({
+  const reorderContent = useMutation(
+    trpc.admin.contentReorder.mutationOptions({
       onSuccess: () => {
-        toast.success("Sắp xếp bài học thành công");
+        toast.success("Sắp xếp nội dung thành công");
         if (courseId) {
           queryClient.invalidateQueries({
             queryKey: trpc.admin.courseGetDetail.queryKey({ courseId }),
@@ -70,7 +70,7 @@ export function useLessonMutations(courseId?: string) {
         if (code === "BAD_REQUEST") {
           toast.error(err.message);
         } else {
-          toast.error(`Lỗi sắp xếp bài học: ${err.message}`);
+          toast.error(`Lỗi sắp xếp nội dung: ${err.message}`);
         }
       },
     })
@@ -80,6 +80,6 @@ export function useLessonMutations(courseId?: string) {
     createLesson,
     updateLesson,
     deleteLesson,
-    reorderLessons,
+    reorderContent,
   };
 }

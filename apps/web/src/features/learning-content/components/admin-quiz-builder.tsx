@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuizMutations } from "../hooks/use-quiz-mutations";
 import { Button } from "@engducation/ui/components/button";
 import { Input } from "@engducation/ui/components/input";
@@ -33,19 +33,17 @@ interface QuestionData {
 
 interface QuizData {
   id: string;
+  moduleId: string;
   title: string;
+  status: string;
   questions: QuestionData[];
-}
-
-interface LessonData {
-  id: string;
-  title: string;
-  quiz?: QuizData | null;
 }
 
 interface AdminQuizBuilderProps {
   courseId: string;
-  lesson: LessonData;
+  moduleId: string;
+  quiz?: QuizData | null;
+  onFinished: () => void;
 }
 
 interface FormAnswer {
@@ -145,7 +143,7 @@ function QuestionCard({
   };
 
   return (
-    <div className="border border-border bg-card rounded-md p-3 space-y-3">
+    <div className="border border-border bg-card rounded-md p-3 space-y-3 shadow-sm hover:border-emerald-500/30 transition-all duration-200">
       {/* Question Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -232,7 +230,7 @@ function QuestionCard({
                 onClick={() => removeAnswer(answerIndex)}
                 className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive shrink-0"
               >
-                <Trash2 className="h-3 w-3" />
+                <Trash2 className="h-3.5 w-3.5" />
               </Button>
             )}
           </div>
@@ -243,7 +241,7 @@ function QuestionCard({
             variant="outline"
             size="sm"
             onClick={addAnswer}
-            className="h-7 text-[10px] font-bold w-full"
+            className="h-7 text-[10px] font-bold w-full border-dashed"
           >
             <Plus className="h-3 w-3 mr-1" />
             Thêm lựa chọn đáp án
@@ -254,26 +252,37 @@ function QuestionCard({
   );
 }
 
-export function AdminQuizBuilder({ courseId, lesson }: AdminQuizBuilderProps) {
+export function AdminQuizBuilder({ courseId, moduleId, quiz, onFinished }: AdminQuizBuilderProps) {
   const { upsertQuizStructure, deleteQuiz } = useQuizMutations(courseId);
-  const existingQuiz = lesson.quiz;
-  const [quizTitle, setQuizTitle] = useState(
-    existingQuiz?.title ?? `Bài tập củng cố: ${lesson.title}`
-  );
-  const [questions, setQuestions] = useState<FormQuestion[]>(
-    existingQuiz?.questions.map((q) => ({
-      id: q.id,
-      content: q.content,
-      explanation: q.explanation ?? "",
-      answers: q.answers.map((a) => ({
-        id: a.id,
-        content: a.content,
-        isCorrect: a.isCorrect,
-      })),
-    })) ?? []
-  );
+  const [quizTitle, setQuizTitle] = useState("");
+  const [status, setStatus] = useState<"draft" | "published" | "archived">("draft");
+  const [questions, setQuestions] = useState<FormQuestion[]>([]);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  useEffect(() => {
+    if (quiz) {
+      setQuizTitle(quiz.title);
+      setStatus(quiz.status as any);
+      setQuestions(
+        quiz.questions.map((q) => ({
+          id: q.id,
+          content: q.content,
+          explanation: q.explanation ?? "",
+          answers: q.answers.map((a) => ({
+            id: a.id,
+            content: a.content,
+            isCorrect: a.isCorrect,
+          })),
+        }))
+      );
+    } else {
+      setQuizTitle("");
+      setStatus("draft");
+      setQuestions([createEmptyQuestion()]);
+    }
+    setValidationError(null);
+  }, [quiz, moduleId]);
 
   const updateQuestion = (index: number, updated: FormQuestion) => {
     setQuestions((prev) => {
@@ -293,6 +302,10 @@ export function AdminQuizBuilder({ courseId, lesson }: AdminQuizBuilderProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!quizTitle.trim()) {
+      setValidationError("Tiêu đề bài tập không được để trống");
+      return;
+    }
     const err = validateQuestions(questions);
     if (err) {
       setValidationError(err);
@@ -301,41 +314,54 @@ export function AdminQuizBuilder({ courseId, lesson }: AdminQuizBuilderProps) {
     setValidationError(null);
 
     const payload = {
-      quizId: existingQuiz?.id,
-      lessonId: lesson.id,
-      title: quizTitle,
+      quizId: quiz?.id,
+      moduleId,
+      title: quizTitle.trim(),
+      status,
       questions: questions.map((q, i) => ({
         id: q.id,
-        content: q.content,
-        explanation: q.explanation || undefined,
+        content: q.content.trim(),
+        explanation: q.explanation.trim() || undefined,
         order: i + 1,
         answers: q.answers.map((a) => ({
           id: a.id,
-          content: a.content,
+          content: a.content.trim(),
           isCorrect: a.isCorrect,
         })),
       })),
     };
 
-    await upsertQuizStructure.mutateAsync(payload);
+    try {
+      await upsertQuizStructure.mutateAsync(payload);
+      onFinished();
+    } catch {
+      // Handled by react-query error callbacks
+    }
   };
 
   const handleDeleteQuiz = async () => {
-    if (!existingQuiz) return;
-    await deleteQuiz.mutateAsync({ id: existingQuiz.id });
+    if (!quiz) return;
+    await deleteQuiz.mutateAsync({ id: quiz.id });
     setShowDeleteConfirm(false);
+    onFinished();
   };
 
   const isSubmitting = upsertQuizStructure.isPending;
 
   return (
-    <Card className="border border-border bg-card shadow-sm">
-      <CardHeader className="py-3 border-b border-border flex flex-row items-center justify-between">
-        <CardTitle className="text-sm font-bold uppercase tracking-wider text-card-foreground">
-          Thiết lập Bài tập: {lesson.title}
-        </CardTitle>
-        {existingQuiz && (
+    <Card className="border border-border bg-card/60 backdrop-blur-md shadow-lg overflow-hidden transition-all duration-300">
+      <CardHeader className="py-3 border-b border-border bg-muted/20 flex flex-row items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="p-1.5 rounded bg-emerald-500/10 text-emerald-500">
+            <CheckCircle2 className="h-4 w-4" />
+          </div>
+          <CardTitle className="text-sm font-bold uppercase tracking-wider text-card-foreground">
+            {quiz ? "Cập nhật bài tập trắc nghiệm" : "Tạo bài tập trắc nghiệm"}
+          </CardTitle>
+        </div>
+        {quiz && (
           <Button
+            type="button"
             variant="destructive"
             onClick={() => setShowDeleteConfirm(true)}
             disabled={deleteQuiz.isPending}
@@ -369,17 +395,33 @@ export function AdminQuizBuilder({ courseId, lesson }: AdminQuizBuilderProps) {
 
       <CardContent className="p-4">
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Quiz Title */}
-          <div className="flex flex-col gap-1.5">
-            <Label className="text-xs font-bold uppercase text-muted-foreground">
-              Tiêu đề bài tập *
-            </Label>
-            <Input
-              value={quizTitle}
-              onChange={(e) => setQuizTitle(e.target.value)}
-              placeholder="Nhập tiêu đề bài tập..."
-              className="text-xs"
-            />
+          {/* Quiz Title & Status */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="md:col-span-2 flex flex-col gap-1.5">
+              <Label className="text-xs font-bold uppercase text-muted-foreground">
+                Tiêu đề bài tập *
+              </Label>
+              <Input
+                value={quizTitle}
+                onChange={(e) => setQuizTitle(e.target.value)}
+                placeholder="Ví dụ: Quiz: Grammar checkpoint 1"
+                className="text-xs focus:ring-emerald-500/50"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs font-bold uppercase text-muted-foreground">
+                Trạng thái (Status)
+              </Label>
+              <select
+                value={status}
+                onChange={(e) => setStatus(e.target.value as any)}
+                className="flex h-8 w-full border border-input bg-background px-2.5 py-1 text-xs text-foreground shadow-sm transition-colors outline-none focus-visible:border-emerald-500/50 focus-visible:ring-1 focus-visible:ring-emerald-500/50 disabled:opacity-50 dark:bg-input/30"
+              >
+                <option value="draft">DRAFT (Bản nháp)</option>
+                <option value="published">PUBLISHED (Xuất bản)</option>
+                <option value="archived">ARCHIVED (Lưu trữ)</option>
+              </select>
+            </div>
           </div>
 
           {/* Dynamic Questions */}
@@ -408,16 +450,18 @@ export function AdminQuizBuilder({ courseId, lesson }: AdminQuizBuilderProps) {
               </div>
             )}
 
-            {questions.map((question, index) => (
-              <QuestionCard
-                key={question.id}
-                question={question}
-                index={index}
-                onUpdate={(updated) => updateQuestion(index, updated)}
-                onRemove={() => removeQuestion(index)}
-                canRemove={questions.length > 1}
-              />
-            ))}
+            <div className="space-y-4 max-h-[50vh] overflow-y-auto pr-1">
+              {questions.map((question, index) => (
+                <QuestionCard
+                  key={question.id}
+                  question={question}
+                  index={index}
+                  onUpdate={(updated) => updateQuestion(index, updated)}
+                  onRemove={() => removeQuestion(index)}
+                  canRemove={questions.length > 1}
+                />
+              ))}
+            </div>
           </div>
 
           {/* Validation Error */}
@@ -429,15 +473,23 @@ export function AdminQuizBuilder({ courseId, lesson }: AdminQuizBuilderProps) {
           )}
 
           {/* Submit */}
-          <div className="flex justify-end pt-2">
+          <div className="flex justify-end gap-2 pt-2 border-t border-border">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onFinished}
+              className="font-bold text-xs"
+            >
+              HỦY
+            </Button>
             <Button
               type="submit"
               disabled={isSubmitting}
-              className="font-bold text-xs"
+              className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs"
             >
               {isSubmitting
                 ? "ĐANG LƯU..."
-                : existingQuiz
+                : quiz
                 ? "CẬP NHẬT BÀI TẬP"
                 : "TẠO BÀI TẬP"}
             </Button>

@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@engducation/api": "workspace:*",
+    "@engducation/auth": "workspace:*",
     "@engducation/env": "workspace:*",
     "@engducation/ui": "workspace:*",
     "@tanstack/react-form": "^1.28.0",

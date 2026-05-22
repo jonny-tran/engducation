@@ -13,7 +13,6 @@ import { Badge } from "@engducation/ui/components/badge";
 export function AdminDashboardView() {
   const { deleteCourse, updateCourse } = useCourseMutations();
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
-  const [selectedLesson, setSelectedLesson] = useState<any | null>(null);
   const [editingCourse, setEditingCourse] = useState<any | null>(null);
 
   // Fetch course list (no filters)
@@ -42,7 +41,6 @@ export function AdminDashboardView() {
       await deleteCourse.mutateAsync({ id });
       if (selectedCourseId === id) {
         setSelectedCourseId(null);
-        setSelectedLesson(null);
       }
     }
   };
@@ -124,7 +122,6 @@ export function AdminDashboardView() {
                             <Button
                               onClick={() => {
                                 setSelectedCourseId(course.id);
-                                setSelectedLesson(null);
                               }}
                               size="sm"
                               variant={isSelected ? "default" : "secondary"}
@@ -179,7 +176,6 @@ export function AdminDashboardView() {
                 size="xs"
                 onClick={() => {
                   setSelectedCourseId(null);
-                  setSelectedLesson(null);
                 }}
                 className="text-[10px] font-bold"
               >
@@ -191,40 +187,10 @@ export function AdminDashboardView() {
             {isDetailLoading ? (
               <p className="text-xs italic text-slate-500">Đang tải đề cương bài học...</p>
             ) : courseDetail ? (
-              <>
-                <AdminLessonManager
-                  courseId={selectedCourseId}
-                  lessons={courseDetail.lessons}
-                  onSelectLessonForQuiz={(lesson) => {
-                    // Find actual enriched lesson detail with quiz from courseDetail lessons
-                    const matched = courseDetail.lessons.find((l) => l.id === lesson.id);
-                    setSelectedLesson(matched);
-                  }}
-                />
-
-                {/* SECTION 3: QUIZ & QUESTION BUILDER (ONLY SHOW IF LESSON SELECTED) */}
-                {selectedLesson && (
-                  <div className="pt-4 border-t border-border">
-                    <div className="flex justify-between items-center mb-2.5">
-                      <div className="text-xs font-bold uppercase text-muted-foreground">Quản lý bài tập của bài học</div>
-                      <Button
-                        variant="outline"
-                        size="xs"
-                        onClick={() => setSelectedLesson(null)}
-                        className="text-[10px] font-bold"
-                      >
-                        ẨN BÀI TẬP
-                      </Button>
-                    </div>
-                    {/* Retrieve correct quiz state from courseDetail lessons */}
-                    {(() => {
-                      const enrichedLesson = courseDetail.lessons.find((l) => l.id === selectedLesson.id);
-                      if (!enrichedLesson) return null;
-                      return <AdminQuizBuilder courseId={selectedCourseId} lesson={enrichedLesson} />;
-                    })()}
-                  </div>
-                )}
-              </>
+              <AdminLessonManager
+                courseId={selectedCourseId}
+                modules={courseDetail.modules}
+              />
             ) : (
               <p className="text-xs italic text-slate-500">Không tìm thấy chi tiết khóa học.</p>
             )}

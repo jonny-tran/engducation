@@ -154,6 +154,9 @@ importers:
       '@engducation/api':
         specifier: workspace:*
         version: link:../../packages/api
+      '@engducation/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
       '@engducation/env':
         specifier: workspace:*
         version: link:../../packages/env

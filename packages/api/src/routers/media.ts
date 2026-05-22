@@ -25,22 +25,32 @@ export const mediaRouter = router({
       }
 
       const timestamp = Math.round(Date.now() / 1000);
-      const publicIdPrefix = `media_${crypto.randomUUID().slice(0, 8)}`;
 
       // Build parameters string for Cloudinary signature (alphabetically sorted)
       const toSign = [
         `folder=${input.folder}`,
-        `public_id_prefix=${publicIdPrefix}`,
         `timestamp=${timestamp}`,
         `upload_preset=${input.uploadPreset}`,
       ]
         .sort()
         .join("&");
 
+      console.log("[Cloudinary Signature] === INCOMING REQUEST ===");
+      console.log("[Cloudinary Signature] Input:", JSON.stringify(input));
+      console.log("[Cloudinary Signature] Env - cloudName:", cloudName ? "SET" : "NOT SET");
+      console.log("[Cloudinary Signature] Env - apiKey:", apiKey ? "SET" : "NOT SET");
+      console.log("[Cloudinary Signature] Env - apiSecret:", apiSecret ? "SET (len=" + apiSecret.length + ")" : "NOT SET");
+      console.log("[Cloudinary Signature] toSign string:", toSign);
+      console.log("[Cloudinary Signature] full string to hash:", toSign + apiSecret);
+
       const signature = crypto
         .createHash("sha256")
         .update(toSign + apiSecret)
         .digest("hex");
+
+      console.log("[Cloudinary Signature] === GENERATED SIGNATURE ===");
+      console.log("[Cloudinary Signature] signature:", signature);
+      console.log("[Cloudinary Signature] signature length:", signature.length);
 
       const uploadUrl = `https://api.cloudinary.com/v1_1/${cloudName}/${input.resourceType}/upload`;
 
@@ -51,7 +61,6 @@ export const mediaRouter = router({
         apiKey,
         uploadUrl,
         folder: input.folder,
-        publicIdPrefix,
         uploadPreset: input.uploadPreset,
       };
     }),

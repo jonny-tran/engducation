@@ -53,13 +53,35 @@ export const courses = pgTable("courses", {
     .notNull(),
 });
 
-export const lessons = pgTable(
-  "lessons",
+export const modules = pgTable(
+  "modules",
   {
     id: text("id").primaryKey(),
     courseId: text("course_id")
       .notNull()
       .references(() => courses.id, { onDelete: "restrict" }),
+    title: text("title").notNull(),
+    description: text("description"),
+    order: integer("order").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("modules_course_order_idx").on(table.courseId, table.order),
+  ],
+);
+
+export const lessons = pgTable(
+  "lessons",
+  {
+    id: text("id").primaryKey(),
+    moduleId: text("module_id")
+      .notNull()
+      .references(() => modules.id, { onDelete: "cascade" }),
     title: text("title").notNull(),
     description: text("description"),
     videoPublicId: text("video_public_id"),
@@ -74,7 +96,7 @@ export const lessons = pgTable(
       .notNull(),
   },
   (table) => [
-    uniqueIndex("lessons_course_order_idx").on(table.courseId, table.order),
+    uniqueIndex("lessons_module_order_idx").on(table.moduleId, table.order),
   ],
 );
 
@@ -82,10 +104,12 @@ export const quizzes = pgTable(
   "quizzes",
   {
     id: text("id").primaryKey(),
-    lessonId: text("lesson_id")
+    moduleId: text("module_id")
       .notNull()
-      .references(() => lessons.id, { onDelete: "cascade" }),
+      .references(() => modules.id, { onDelete: "cascade" }),
     title: text("title").notNull(),
+    order: integer("order").notNull(),
+    status: contentStatusEnum("status").default("draft").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -94,8 +118,56 @@ export const quizzes = pgTable(
       .notNull(),
   },
   (table) => [
-    uniqueIndex("quizzes_lesson_unique_idx").on(table.lessonId),
+    uniqueIndex("quizzes_module_order_idx").on(table.moduleId, table.order),
   ],
+);
+
+export const writingAssignments = pgTable(
+  "writing_assignments",
+  {
+    id: text("id").primaryKey(),
+    moduleId: text("module_id")
+      .notNull()
+      .references(() => modules.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    prompt: text("prompt").notNull(),
+    rubric: text("rubric").notNull(),
+    wordLimit: integer("word_limit"),
+    suggestedAnswer: text("suggested_answer"),
+    order: integer("order").notNull(),
+    status: contentStatusEnum("status").default("draft").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("writing_assignments_module_order_idx").on(
+      table.moduleId,
+      table.order,
+    ),
+  ],
+);
+
+export const writingSubmissions = pgTable(
+  "writing_submissions",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    writingId: text("writing_id")
+      .notNull()
+      .references(() => writingAssignments.id, { onDelete: "cascade" }),
+    essay: text("essay").notNull(),
+    score: integer("score"),
+    feedback: jsonb("feedback"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  }
 );
 
 export const questions = pgTable("questions", {
@@ -130,19 +202,25 @@ export const answers = pgTable("answers", {
 export const userProgress = pgTable(
   "user_progress",
   {
+    id: text("id").primaryKey(),
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     lessonId: text("lesson_id")
-      .notNull()
       .references(() => lessons.id, { onDelete: "cascade" }),
+    quizId: text("quiz_id")
+      .references(() => quizzes.id, { onDelete: "cascade" }),
+    writingId: text("writing_id")
+      .references(() => writingAssignments.id, { onDelete: "cascade" }),
     status: progressStatusEnum("status").default("learning").notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
   },
   (table) => [
-    primaryKey({ columns: [table.userId, table.lessonId] }),
+    uniqueIndex("user_progress_user_lesson_idx").on(table.userId, table.lessonId),
+    uniqueIndex("user_progress_user_quiz_idx").on(table.userId, table.quizId),
+    uniqueIndex("user_progress_user_writing_idx").on(table.userId, table.writingId),
   ],
 );
 
@@ -166,28 +244,55 @@ export const quizAttempts = pgTable("quiz_attempts", {
 // ==========================================
 
 export const coursesRelations = relations(courses, ({ many }) => ({
+  modules: many(modules),
+}));
+
+export const modulesRelations = relations(modules, ({ one, many }) => ({
+  course: one(courses, {
+    fields: [modules.courseId],
+    references: [courses.id],
+  }),
   lessons: many(lessons),
+  quizzes: many(quizzes),
+  writingAssignments: many(writingAssignments),
 }));
 
 export const lessonsRelations = relations(lessons, ({ one, many }) => ({
-  course: one(courses, {
-    fields: [lessons.courseId],
-    references: [courses.id],
-  }),
-  quiz: one(quizzes, {
-    fields: [lessons.id],
-    references: [quizzes.lessonId],
+  module: one(modules, {
+    fields: [lessons.moduleId],
+    references: [modules.id],
   }),
   progressLogs: many(userProgress),
 }));
 
 export const quizzesRelations = relations(quizzes, ({ one, many }) => ({
-  lesson: one(lessons, {
-    fields: [quizzes.lessonId],
-    references: [lessons.id],
+  module: one(modules, {
+    fields: [quizzes.moduleId],
+    references: [modules.id],
   }),
   questions: many(questions),
   attempts: many(quizAttempts),
+  progressLogs: many(userProgress),
+}));
+
+export const writingAssignmentsRelations = relations(writingAssignments, ({ one, many }) => ({
+  module: one(modules, {
+    fields: [writingAssignments.moduleId],
+    references: [modules.id],
+  }),
+  submissions: many(writingSubmissions),
+  progressLogs: many(userProgress),
+}));
+
+export const writingSubmissionsRelations = relations(writingSubmissions, ({ one }) => ({
+  user: one(user, {
+    fields: [writingSubmissions.userId],
+    references: [user.id],
+  }),
+  writingAssignment: one(writingAssignments, {
+    fields: [writingSubmissions.writingId],
+    references: [writingAssignments.id],
+  }),
 }));
 
 export const questionsRelations = relations(questions, ({ one, many }) => ({
@@ -213,6 +318,14 @@ export const userProgressRelations = relations(userProgress, ({ one }) => ({
   lesson: one(lessons, {
     fields: [userProgress.lessonId],
     references: [lessons.id],
+  }),
+  quiz: one(quizzes, {
+    fields: [userProgress.quizId],
+    references: [quizzes.id],
+  }),
+  writingAssignment: one(writingAssignments, {
+    fields: [userProgress.writingId],
+    references: [writingAssignments.id],
   }),
 }));
 

@@ -5,8 +5,8 @@ import { toast } from "sonner";
 export function useStudentLearning(courseId?: string) {
   const queryClient = useQueryClient();
 
-  const trackProgress = useMutation(
-    trpc.user.trackLessonProgress.mutationOptions({
+  const trackContentProgress = useMutation(
+    trpc.user.trackContentProgress.mutationOptions({
       onSuccess: () => {
         // Invalidate both lists and detail
         queryClient.invalidateQueries({
@@ -55,9 +55,29 @@ export function useStudentLearning(courseId?: string) {
     })
   );
 
+  const submitWriting = useMutation(
+    trpc.user.submitWriting.mutationOptions({
+      onSuccess: (data) => {
+        toast.success(`Nộp bài viết luận thành công! AI chấm điểm bài viết: ${data.score}/100`);
+        queryClient.invalidateQueries({
+          queryKey: trpc.user.courseList.queryKey(),
+        });
+        if (courseId) {
+          queryClient.invalidateQueries({
+            queryKey: trpc.user.courseGetDetail.queryKey({ courseId }),
+          });
+        }
+      },
+      onError: (err) => {
+        toast.error(`Lỗi nộp bài viết luận: ${err.message}`);
+      },
+    })
+  );
+
   return {
-    trackProgress,
+    trackContentProgress,
     getMediaUrl,
     submitQuiz,
+    submitWriting,
   };
 }

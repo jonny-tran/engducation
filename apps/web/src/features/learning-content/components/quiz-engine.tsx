@@ -9,8 +9,8 @@ import { Badge } from "@engducation/ui/components/badge";
 
 interface QuizEngineProps {
   courseId: string;
-  lessonId: string;
-  lessonTitle: string;
+  quizId: string;
+  quizTitle: string;
   onClose: () => void;
 }
 
@@ -19,25 +19,25 @@ interface SelectedAnswerState {
   selectedOption: "A" | "B" | "C" | "D";
 }
 
-export function QuizEngine({ courseId, lessonId, lessonTitle, onClose }: QuizEngineProps) {
+export function QuizEngine({ courseId, quizId, quizTitle, onClose }: QuizEngineProps) {
   const { submitQuiz } = useStudentLearning(courseId);
 
-  // Fetch the quiz for this lesson
+  // Fetch the quiz by quizId
   const {
     data: quizData,
     isLoading: isQuizLoading,
     error: quizError,
-  } = useQuery(trpc.user.getQuiz.queryOptions({ lessonId }));
+  } = useQuery(trpc.user.getQuiz.queryOptions({ quizId }));
 
   // Quiz state
   const [selectedAnswers, setSelectedAnswers] = useState<SelectedAnswerState[]>([]);
   const [quizResult, setQuizResult] = useState<any | null>(null);
 
-  // Reset states when lesson changes
+  // Reset states when quiz changes
   useEffect(() => {
     setSelectedAnswers([]);
     setQuizResult(null);
-  }, [lessonId]);
+  }, [quizId]);
 
   const handleOptionChange = (questionId: string, option: "A" | "B" | "C" | "D") => {
     setSelectedAnswers((prev) => {
@@ -63,7 +63,7 @@ export function QuizEngine({ courseId, lessonId, lessonTitle, onClose }: QuizEng
 
     try {
       const data = await submitQuiz.mutateAsync({
-        lessonId,
+        quizId,
         answers: selectedAnswers,
       });
       setQuizResult(data);
@@ -80,7 +80,7 @@ export function QuizEngine({ courseId, lessonId, lessonTitle, onClose }: QuizEng
   if (isQuizLoading) {
     return (
       <div className="p-4 text-xs italic text-slate-500 text-center animate-pulse">
-        Đang tải bài trắc nghiệm củng cố của bài học...
+        Đang tải bài tập trắc nghiệm...
       </div>
     );
   }
@@ -88,10 +88,10 @@ export function QuizEngine({ courseId, lessonId, lessonTitle, onClose }: QuizEng
   if (quizError) {
     return (
       <Card className="border border-destructive bg-destructive/10 text-destructive dark:bg-destructive/20 p-4 text-xs text-center space-y-2 rounded-md">
-        <p className="font-bold">Không tìm thấy bài tập trắc nghiệm cho bài học này.</p>
+        <p className="font-bold">Không tìm thấy bài tập trắc nghiệm này.</p>
         <p className="text-[10px] text-destructive font-mono">Chi tiết: {quizError.message}</p>
         <Button variant="destructive" onClick={onClose} size="sm" className="mt-1">
-          Quay lại bài học
+          Quay lại học
         </Button>
       </Card>
     );
@@ -112,7 +112,7 @@ export function QuizEngine({ courseId, lessonId, lessonTitle, onClose }: QuizEng
           <CardTitle className="text-sm font-bold uppercase tracking-wider text-foreground">
             Bài tập: {quizData.title}
           </CardTitle>
-          <div className="text-[10px] text-muted-foreground mt-1">Gắn với bài học: {lessonTitle}</div>
+          <div className="text-[10px] text-muted-foreground mt-1">Bài tập trắc nghiệm: {quizTitle}</div>
         </div>
         <Button
           variant="outline"

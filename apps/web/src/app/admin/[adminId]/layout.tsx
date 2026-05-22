@@ -1,6 +1,6 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { authClient } from "@/lib/auth-client";
+import { auth } from "@engducation/auth";
 import { AdminSidebar } from "@/components/layout/admin-sidebar";
 import {
   SidebarInset,
@@ -15,11 +15,8 @@ interface LayoutProps {
 export default async function AdminLayout({ children, params }: LayoutProps) {
   const { adminId } = await params;
 
-  const session = await authClient.getSession({
-    fetchOptions: {
-      headers: await headers(),
-      throw: true,
-    },
+  const session = await auth.api.getSession({
+    headers: await headers(),
   });
 
   if (!session?.user) {

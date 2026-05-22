@@ -44,6 +44,16 @@ export function useCloudinaryUpload(options?: CloudinaryUploadOptions) {
         resourceType,
       });
 
+      console.log("[Cloudinary Upload] Signature response:", {
+        uploadUrl: sig.uploadUrl,
+        folder: sig.folder,
+        uploadPreset: sig.uploadPreset,
+        timestamp: sig.timestamp,
+        apiKey: sig.apiKey,
+        signatureLength: sig.signature?.length,
+        signaturePrefix: sig.signature?.substring(0, 20),
+      });
+
       // Step 2: Upload directly to Cloudinary from the browser
       const formData = new FormData();
       formData.append("file", file);
@@ -52,7 +62,16 @@ export function useCloudinaryUpload(options?: CloudinaryUploadOptions) {
       formData.append("signature", sig.signature);
       formData.append("folder", sig.folder);
       formData.append("upload_preset", sig.uploadPreset);
-      formData.append("public_id_prefix", sig.publicIdPrefix);
+
+      // Log what we're sending (without the actual file)
+      console.log("[Cloudinary Upload] FormData entries:");
+      console.log("  api_key:", sig.apiKey);
+      console.log("  timestamp:", sig.timestamp);
+      console.log("  signature:", sig.signature);
+      console.log("  folder:", sig.folder);
+      console.log("  upload_preset:", sig.uploadPreset);
+      console.log("  resourceType:", resourceType);
+      console.log("  file type:", file.type, "size:", file.size);
 
       return new Promise<UploadedVideo>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
@@ -64,27 +83,39 @@ export function useCloudinaryUpload(options?: CloudinaryUploadOptions) {
         });
 
         xhr.addEventListener("load", () => {
+          console.log("[Cloudinary Upload] Response status:", xhr.status);
+          console.log("[Cloudinary Upload] Raw response body:", JSON.stringify(xhr.responseText));
+          console.log("[Cloudinary Upload] Response body length:", xhr.responseText?.length);
+
           if (xhr.status >= 200 && xhr.status < 300) {
             try {
               const response = JSON.parse(xhr.responseText);
+              console.log("[Cloudinary Upload] Success response:", response);
               resolve({
                 publicId: response.public_id as string,
                 secureUrl: response.secure_url as string,
               });
             } catch {
-              reject(new Error("Phản hồi từ Cloudinary không hợp lệ"));
+              reject(new Error("Phản hồi từ Cloudinary không hợp lệ: " + xhr.responseText));
             }
           } else {
             try {
-              const error = JSON.parse(xhr.responseText);
-              reject(new Error(error.error?.message ?? "Upload thất bại"));
+              const error = JSON.parse(xhr.responseText || "{}");
+              console.error("[Cloudinary Upload] Upload error response:", error);
+              // Also check for Cloudinary-specific error formats
+              const message = error.error?.message
+                || error.message
+                || error.error
+                || `Upload thất bại (HTTP ${xhr.status}). Response: ${xhr.responseText}`;
+              reject(new Error(message));
             } catch {
-              reject(new Error(`Upload thất bại: HTTP ${xhr.status}`));
+              reject(new Error(`Upload thất bại: HTTP ${xhr.status}. Body: ${xhr.responseText}`));
             }
           }
         });
 
         xhr.addEventListener("error", () => {
+          console.error("[Cloudinary Upload] Network error");
           reject(new Error("Lỗi mạng khi upload video"));
         });
 

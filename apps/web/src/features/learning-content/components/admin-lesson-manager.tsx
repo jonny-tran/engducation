@@ -1,7 +1,12 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 import { useLessonMutations } from "../hooks/use-lesson-mutations";
+import { useModuleMutations } from "../hooks/use-module-mutations";
+import { useWritingMutations } from "../hooks/use-writing-mutations";
+import { useQuizMutations } from "../hooks/use-quiz-mutations";
 import { useCloudinaryUpload } from "../hooks/use-cloudinary-upload";
+import { AdminQuizBuilder } from "./admin-quiz-builder";
+import { AdminWritingBuilder } from "./admin-writing-builder";
 import { Button } from "@engducation/ui/components/button";
 import { Input } from "@engducation/ui/components/input";
 import { Textarea } from "@engducation/ui/components/textarea";
@@ -19,74 +24,169 @@ import {
   AlertDialogTrigger,
 } from "@engducation/ui/components/alert-dialog";
 import { Progress } from "@engducation/ui/components/progress";
-import { Upload, X } from "lucide-react";
+import { Label } from "@engducation/ui/components/label";
+import {
+  Upload,
+  X,
+  Plus,
+  Play,
+  BookOpen,
+  HelpCircle,
+  PenTool,
+  ArrowUp,
+  ArrowDown,
+  Trash2,
+  Edit,
+  FolderPlus,
+  ChevronDown,
+  ChevronUp,
+  Folder,
+} from "lucide-react";
 
-interface LessonData {
+interface PeerItem {
+  id: string;
+  moduleId: string;
+  title: string;
+  order: number;
+  status: string;
+  type: "lesson" | "quiz" | "writing";
+  // Lesson specific
+  description?: string | null;
+  videoPublicId?: string | null;
+  videoUrl?: string | null;
+  // Writing specific
+  prompt?: string;
+  rubric?: string;
+  wordLimit?: number | null;
+  suggestedAnswer?: string | null;
+  // Quiz specific
+  questions?: any[];
+}
+
+interface ModuleData {
   id: string;
   courseId: string;
   title: string;
   description: string | null;
-  videoPublicId: string | null;
-  videoUrl: string | null;
   order: number;
-  status: string;
+  contents: PeerItem[];
 }
 
 interface AdminLessonManagerProps {
   courseId: string;
-  lessons: LessonData[];
-  onSelectLessonForQuiz: (lesson: LessonData) => void;
+  modules: ModuleData[];
 }
 
-export function AdminLessonManager({ courseId, lessons, onSelectLessonForQuiz }: AdminLessonManagerProps) {
-  const { createLesson, updateLesson, deleteLesson, reorderLessons } = useLessonMutations(courseId);
-  const { upload } = useCloudinaryUpload();
-  const [editingLessonId, setEditingLessonId] = useState<string | null>(null);
-  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+type ActiveEditorState =
+  | { type: "empty" }
+  | { type: "new_lesson"; moduleId: string }
+  | { type: "edit_lesson"; lesson: PeerItem }
+  | { type: "new_quiz"; moduleId: string }
+  | { type: "edit_quiz"; quiz: PeerItem }
+  | { type: "new_writing"; moduleId: string }
+  | { type: "edit_writing"; writing: PeerItem };
 
-  // Form State
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
+export function AdminLessonManager({ courseId, modules }: AdminLessonManagerProps) {
+  // Mutations hooks
+  const { createLesson, updateLesson, deleteLesson, reorderContent } = useLessonMutations(courseId);
+  const { createModule, updateModule, deleteModule } = useModuleMutations(courseId);
+  const { deleteWriting } = useWritingMutations(courseId);
+  const { deleteQuiz } = useQuizMutations(courseId);
+  const { upload } = useCloudinaryUpload();
+
+  // Component states
+  const [activeEditor, setActiveEditor] = useState<ActiveEditorState>({ type: "empty" });
+  const [expandedModules, setExpandedModules] = useState<Record<string, boolean>>({});
+  const [newModuleTitle, setNewModuleTitle] = useState("");
+  const [editingModuleId, setEditingModuleId] = useState<string | null>(null);
+  const [editingModuleTitle, setEditingModuleTitle] = useState("");
+  const [editingModuleDesc, setEditingModuleDesc] = useState("");
+
+  // Lesson Form states
+  const [lessonTitle, setLessonTitle] = useState("");
+  const [lessonDescription, setLessonDescription] = useState("");
   const [lessonType, setLessonType] = useState<"TEXT" | "VIDEO">("TEXT");
   const [videoPublicId, setVideoPublicId] = useState("");
   const [videoUrl, setVideoUrl] = useState("");
-  const [status, setStatus] = useState<"draft" | "published" | "archived">("draft");
-  const [orderInput, setOrderInput] = useState<string>("");
+  const [lessonStatus, setLessonStatus] = useState<"draft" | "published" | "archived">("draft");
+  const [lessonOrder, setLessonOrder] = useState("");
 
-  // Cloudinary upload state
+  // Cloudinary video upload states
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Auto-expand first module if none is expanded
   useEffect(() => {
-    resetForm();
-  }, [courseId]);
+    if (modules.length > 0 && Object.keys(expandedModules).length === 0) {
+      setExpandedModules({ [modules[0]!.id]: true });
+    }
+  }, [modules]);
 
-  const resetForm = () => {
-    setTitle("");
-    setDescription("");
+  const toggleModuleExpand = (modId: string) => {
+    setExpandedModules((prev) => ({ ...prev, [modId]: !prev[modId] }));
+  };
+
+  const handleAddModule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newModuleTitle.trim()) return;
+    await createModule.mutateAsync({
+      courseId,
+      title: newModuleTitle.trim(),
+    });
+    setNewModuleTitle("");
+  };
+
+  const handleStartRenameModule = (mod: ModuleData) => {
+    setEditingModuleId(mod.id);
+    setEditingModuleTitle(mod.title);
+    setEditingModuleDesc(mod.description ?? "");
+  };
+
+  const handleSaveRenameModule = async () => {
+    if (!editingModuleTitle.trim() || !editingModuleId) return;
+    await updateModule.mutateAsync({
+      id: editingModuleId,
+      title: editingModuleTitle.trim(),
+      description: editingModuleDesc.trim() || undefined,
+    });
+    setEditingModuleId(null);
+  };
+
+  const handleDeleteModule = async (modId: string) => {
+    await deleteModule.mutateAsync({ id: modId });
+    if (activeEditor.type !== "empty") {
+      setActiveEditor({ type: "empty" });
+    }
+  };
+
+  // Lesson Form management
+  const resetLessonForm = () => {
+    setLessonTitle("");
+    setLessonDescription("");
     setLessonType("TEXT");
     setVideoPublicId("");
     setVideoUrl("");
-    setStatus("draft");
-    setOrderInput("");
-    setEditingLessonId(null);
+    setLessonStatus("draft");
+    setLessonOrder("");
     setUploadProgress(null);
     setIsUploading(false);
   };
 
-  const handleEditClick = (lesson: LessonData) => {
-    setEditingLessonId(lesson.id);
-    setTitle(lesson.title);
-    setDescription(lesson.description ?? "");
-    setLessonType(lesson.videoUrl || lesson.videoPublicId ? "VIDEO" : "TEXT");
-    setVideoPublicId(lesson.videoPublicId ?? "");
-    setVideoUrl(lesson.videoUrl ?? "");
-    setStatus(lesson.status as "draft" | "published" | "archived");
-    setOrderInput(lesson.order.toString());
-    setUploadProgress(null);
-    setIsUploading(false);
-  };
+  useEffect(() => {
+    if (activeEditor.type === "edit_lesson") {
+      const { lesson } = activeEditor;
+      setLessonTitle(lesson.title);
+      setLessonDescription(lesson.description ?? "");
+      setLessonType(lesson.videoUrl || lesson.videoPublicId ? "VIDEO" : "TEXT");
+      setVideoPublicId(lesson.videoPublicId ?? "");
+      setVideoUrl(lesson.videoUrl ?? "");
+      setLessonStatus(lesson.status as any);
+      setLessonOrder(lesson.order.toString());
+    } else {
+      resetLessonForm();
+    }
+  }, [activeEditor]);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -116,7 +216,7 @@ export function AdminLessonManager({ courseId, lessons, onSelectLessonForQuiz }:
       setVideoUrl(result.secureUrl);
       setUploadProgress(100);
     } catch {
-      // Error is already toasted by the hook
+      // Toast handles error automatically
     } finally {
       setIsUploading(false);
     }
@@ -126,386 +226,530 @@ export function AdminLessonManager({ courseId, lessons, onSelectLessonForQuiz }:
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleLessonSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim()) return;
+    if (!lessonTitle.trim()) return;
 
     const payload = {
-      title,
-      description: description || undefined,
+      title: lessonTitle.trim(),
+      description: lessonDescription.trim() || undefined,
       videoPublicId: lessonType === "VIDEO" ? (videoPublicId || undefined) : undefined,
       videoUrl: lessonType === "VIDEO" ? (videoUrl || undefined) : undefined,
-      status,
-      order: orderInput ? parseInt(orderInput, 10) : undefined,
+      status: lessonStatus,
+      order: lessonOrder ? parseInt(lessonOrder, 10) : undefined,
     };
 
-    if (editingLessonId) {
+    if (activeEditor.type === "edit_lesson") {
       await updateLesson.mutateAsync({
-        id: editingLessonId,
+        id: activeEditor.lesson.id,
         ...payload,
       });
-    } else {
+    } else if (activeEditor.type === "new_lesson") {
       await createLesson.mutateAsync({
-        courseId,
+        moduleId: activeEditor.moduleId,
         ...payload,
       });
     }
-    resetForm();
+    setActiveEditor({ type: "empty" });
   };
 
-  const confirmDelete = async () => {
-    if (!deleteTargetId) return;
-    await deleteLesson.mutateAsync({ id: deleteTargetId });
-    setDeleteTargetId(null);
+  const handleDeleteItem = async (item: PeerItem) => {
+    if (confirm(`Bạn có chắc chắn muốn xóa bài học/bài tập "${item.title}"?`)) {
+      if (item.type === "lesson") {
+        await deleteLesson.mutateAsync({ id: item.id });
+      } else if (item.type === "quiz") {
+        await deleteQuiz.mutateAsync({ id: item.id });
+      } else if (item.type === "writing") {
+        await deleteWriting.mutateAsync({ id: item.id });
+      }
+
+      if (
+        (activeEditor.type === "edit_lesson" && activeEditor.lesson.id === item.id) ||
+        (activeEditor.type === "edit_quiz" && activeEditor.quiz.id === item.id) ||
+        (activeEditor.type === "edit_writing" && activeEditor.writing.id === item.id)
+      ) {
+        setActiveEditor({ type: "empty" });
+      }
+    }
   };
 
-  const handleMove = async (index: number, direction: "UP" | "DOWN") => {
-    const targetIndex = direction === "UP" ? index - 1 : index + 1;
-    if (targetIndex < 0 || targetIndex >= lessons.length) return;
+  const handleMove = async (mod: ModuleData, currentIndex: number, direction: "UP" | "DOWN") => {
+    const targetIndex = direction === "UP" ? currentIndex - 1 : currentIndex + 1;
+    if (targetIndex < 0 || targetIndex >= mod.contents.length) return;
 
-    const currentLesson = lessons[index]!;
-    const adjacentLesson = lessons[targetIndex]!;
+    const currentItem = mod.contents[currentIndex]!;
+    const adjacentItem = mod.contents[targetIndex]!;
 
-    await reorderLessons.mutateAsync({
-      courseId,
+    await reorderContent.mutateAsync({
+      moduleId: mod.id,
       movements: [
-        { id: currentLesson.id, order: adjacentLesson.order },
-        { id: adjacentLesson.id, order: currentLesson.order },
+        { id: currentItem.id, type: currentItem.type, order: adjacentItem.order },
+        { id: adjacentItem.id, type: adjacentItem.type, order: currentItem.order },
       ],
     });
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-      {/* Lesson List View */}
-      <Card className="lg:col-span-2 border border-border bg-card">
-        <CardHeader className="py-3 border-b border-border bg-muted/20">
-          <CardTitle className="text-sm font-bold uppercase tracking-wider text-foreground">
-            Danh sách bài học ({lessons.length})
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          {lessons.length === 0 ? (
-            <p className="p-4 text-xs text-muted-foreground italic">Chưa có bài học nào trong khóa này.</p>
-          ) : (
-            <table className="w-full text-xs text-left border-collapse">
-              <thead>
-                <tr className="bg-muted/50 border-b border-border font-bold uppercase text-muted-foreground">
-                  <th className="p-2.5 w-12 text-center">STT</th>
-                  <th className="p-2.5">Bài học</th>
-                  <th className="p-2.5 w-16 text-center">Loại</th>
-                  <th className="p-2.5 w-20 text-center">Trạng thái</th>
-                  <th className="p-2.5 w-40 text-center">Thao tác</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {lessons.map((lesson, index) => {
-                  const isVideo = lesson.videoUrl || lesson.videoPublicId;
-                  return (
-                    <tr key={lesson.id} className="hover:bg-muted/30">
-                      <td className="p-2.5 text-center font-mono text-muted-foreground">{lesson.order}</td>
-                      <td className="p-2.5">
-                        <div className="font-bold text-foreground">{lesson.title}</div>
-                        {lesson.description && (
-                          <div className="text-[10px] text-muted-foreground mt-0.5 line-clamp-1">{lesson.description}</div>
-                        )}
-                        {isVideo && (
-                          <div className="text-[9px] text-muted-foreground font-mono mt-0.5 break-all">
-                            ID: {lesson.videoPublicId} | URL: {lesson.videoUrl?.slice(0, 40)}...
-                          </div>
-                        )}
-                      </td>
-                      <td className="p-2.5 text-center">
-                        <Badge
-                          variant="outline"
-                          className={`text-[9px] font-bold ${
-                            isVideo
-                              ? "border-blue-500/20 text-blue-600 bg-blue-500/10"
-                              : "border-border text-muted-foreground bg-muted"
-                          }`}
-                        >
-                          {isVideo ? "VIDEO" : "TEXT"}
-                        </Badge>
-                      </td>
-                      <td className="p-2.5 text-center">
-                        <Badge
-                          variant="outline"
-                          className={`text-[9px] font-bold uppercase ${
-                            lesson.status === "published"
-                              ? "border-emerald-500/20 text-emerald-600 bg-emerald-500/10"
-                              : "border-amber-500/20 text-amber-600 bg-amber-500/10"
-                          }`}
-                        >
-                          {lesson.status}
-                        </Badge>
-                      </td>
-                      <td className="p-2.5">
-                        <div className="flex flex-wrap gap-1 justify-center">
-                          <Button
-                            variant="outline"
-                            onClick={() => handleEditClick(lesson)}
-                            className="px-1.5 py-0.5 h-6 text-[10px] font-bold"
-                          >
-                            SỬA
-                          </Button>
-
-                          {/* Delete with Shadcn AlertDialog */}
-                          <AlertDialog>
-                            <AlertDialogTrigger
-                              render={
-                                <Button
-                                  variant="destructive"
-                                  className="px-1.5 py-0.5 h-6 text-[10px] font-bold"
-                                  onClick={() => setDeleteTargetId(lesson.id)}
-                                >
-                                  XÓA
-                                </Button>
-                              }
-                            />
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Xác nhận xóa bài học</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Bạn có chắc chắn muốn xóa bài học{" "}
-                                  <strong>&ldquo;{lesson.title}&rdquo;</strong>? Hành động này sẽ xóa toàn bộ bài tập gắn
-                                  với bài học này và không thể hoàn tác.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel onClick={() => setDeleteTargetId(null)}>
-                                  Hủy
-                                </AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={confirmDelete}
-                                  disabled={deleteLesson.isPending}
-                                >
-                                  {deleteLesson.isPending ? "Đang xóa..." : "Xóa bài học"}
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-
-                          <Button
-                            variant="outline"
-                            disabled={index === 0 || reorderLessons.isPending}
-                            onClick={() => handleMove(index, "UP")}
-                            className="px-1.5 py-0.5 h-6 text-[10px]"
-                          >
-                            ▲
-                          </Button>
-                          <Button
-                            variant="outline"
-                            disabled={index === lessons.length - 1 || reorderLessons.isPending}
-                            onClick={() => handleMove(index, "DOWN")}
-                            className="px-1.5 py-0.5 h-6 text-[10px]"
-                          >
-                            ▼
-                          </Button>
-                          <Button
-                            variant="default"
-                            onClick={() => onSelectLessonForQuiz(lesson)}
-                            className="px-1.5 py-0.5 h-6 text-[10px] font-bold"
-                          >
-                            QUIZ
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Lesson Creation / Edit Form */}
-      <Card className="border border-border bg-card">
-        <CardHeader className="py-3 border-b border-border bg-muted/20">
-          <CardTitle className="text-sm font-bold uppercase tracking-wider text-foreground">
-            {editingLessonId ? "Sửa bài học" : "Thêm bài học"}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-4">
-          <form onSubmit={handleSubmit} className="space-y-3.5 text-xs">
-            <div className="flex flex-col gap-1.5">
-              <label className="font-bold uppercase text-muted-foreground">Tiêu đề bài học *</label>
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* LEFT COLUMN: MODULE LIST & ACCORDIONS (2/3 width) */}
+      <div className="lg:col-span-2 space-y-6">
+        {/* Module creator */}
+        <Card className="border border-border bg-card/60 backdrop-blur-md shadow-sm">
+          <CardHeader className="py-3 border-b border-border bg-muted/10 flex flex-row items-center justify-between">
+            <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+              <FolderPlus className="h-4 w-4 text-emerald-500" />
+              Thêm tuần / Module học mới
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-3">
+            <form onSubmit={handleAddModule} className="flex gap-2">
               <Input
                 required
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Nhập tiêu đề..."
+                value={newModuleTitle}
+                onChange={(e) => setNewModuleTitle(e.target.value)}
+                placeholder="Ví dụ: Tuần 1: Giới thiệu thì hiện tại đơn..."
+                className="text-xs flex-1 bg-background/50 focus-visible:ring-emerald-500/50"
               />
-            </div>
+              <Button type="submit" disabled={createModule.isPending} className="bg-emerald-500 hover:bg-emerald-600 font-bold text-xs h-9">
+                <Plus className="h-3.5 w-3.5 mr-1" /> Thêm Module
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
 
-            <div className="flex flex-col gap-1.5">
-              <label className="font-bold uppercase text-muted-foreground">Mô tả ngắn</label>
-              <Textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Mô tả bài học..."
-                className="min-h-[50px]"
-              />
+        {/* Modules Accordion list */}
+        <div className="space-y-4">
+          {modules.length === 0 ? (
+            <div className="p-8 text-center border border-dashed border-border bg-card/40 rounded-lg">
+              <p className="text-xs text-muted-foreground italic">Chưa có module nào. Hãy nhập tên module phía trên để bắt đầu tạo giáo trình.</p>
             </div>
+          ) : (
+            modules.map((mod, modIdx) => {
+              const isExpanded = !!expandedModules[mod.id];
+              const isEditing = editingModuleId === mod.id;
 
-            <div className="grid grid-cols-2 gap-2">
-              <div className="flex flex-col gap-1.5">
-                <label className="font-bold uppercase text-muted-foreground">Loại bài học</label>
-                <select
-                  value={lessonType}
-                  onChange={(e) => setLessonType(e.target.value as "TEXT" | "VIDEO")}
-                  className="flex h-8 w-full border border-input bg-background px-2.5 py-1 text-xs text-foreground shadow-sm transition-colors outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50 disabled:opacity-50 dark:bg-input/30"
+              return (
+                <Card
+                  key={mod.id}
+                  className={`border transition-all duration-300 ${
+                    isExpanded ? "border-emerald-500/30 bg-card/80 shadow-md" : "border-border bg-card/40 hover:bg-card/60"
+                  }`}
                 >
-                  <option value="TEXT">Bài học đọc (TEXT)</option>
-                  <option value="VIDEO">Bài giảng video (VIDEO)</option>
-                </select>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="font-bold uppercase text-muted-foreground">Thứ tự (Order)</label>
-                <Input
-                  type="number"
-                  min="1"
-                  value={orderInput}
-                  onChange={(e) => setOrderInput(e.target.value)}
-                  placeholder="Để trống = tự tăng"
-                />
-              </div>
-            </div>
-
-            {/* VIDEO UPLOAD SECTION */}
-            {lessonType === "VIDEO" && (
-              <div className="p-3 border border-dashed border-border bg-muted/30 space-y-2 rounded-md">
-                <div className="flex flex-col gap-1.5">
-                  <label className="font-bold uppercase text-muted-foreground text-[10px]">
-                    Video bài giảng
-                  </label>
-
-                  {/* Show current video info if editing */}
-                  {videoPublicId && !isUploading && (
-                    <div className="flex items-center justify-between bg-emerald-500/10 border border-emerald-500/20 rounded px-2 py-1.5 text-[10px]">
-                      <span className="text-emerald-600 dark:text-emerald-400 truncate flex-1">
-                        {videoPublicId}
-                      </span>
+                  {/* Module Header */}
+                  <div className="p-3 border-b border-border flex items-center justify-between gap-3 bg-muted/5 select-none">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
                       <button
-                        type="button"
-                        onClick={() => {
-                          setVideoPublicId("");
-                          setVideoUrl("");
-                        }}
-                        className="text-muted-foreground hover:text-destructive ml-2 shrink-0"
+                        onClick={() => toggleModuleExpand(mod.id)}
+                        className="p-1 rounded hover:bg-muted text-muted-foreground shrink-0"
                       >
-                        <X className="h-3 w-3" />
+                        {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                       </button>
+                      <Folder className="h-4.5 w-4.5 text-emerald-500 shrink-0" />
+                      {isEditing ? (
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <Input
+                            value={editingModuleTitle}
+                            onChange={(e) => setEditingModuleTitle(e.target.value)}
+                            className="h-8 text-xs font-bold bg-background py-1 flex-1 focus-visible:ring-emerald-500/50"
+                            placeholder="Tiêu đề module..."
+                          />
+                          <Input
+                            value={editingModuleDesc}
+                            onChange={(e) => setEditingModuleDesc(e.target.value)}
+                            className="h-8 text-[11px] bg-background py-1 flex-1"
+                            placeholder="Mô tả module học..."
+                          />
+                          <Button onClick={handleSaveRenameModule} size="sm" className="h-8 bg-emerald-500 hover:bg-emerald-600 text-[10px] font-bold py-0 px-2 shrink-0">LƯU</Button>
+                          <Button onClick={() => setEditingModuleId(null)} variant="outline" size="sm" className="h-8 text-[10px] py-0 px-2 shrink-0">HỦY</Button>
+                        </div>
+                      ) : (
+                        <div className="flex-1 min-w-0" onClick={() => toggleModuleExpand(mod.id)}>
+                          <div className="text-xs font-bold text-foreground flex items-center gap-2">
+                            <span>Module {modIdx + 1}: {mod.title}</span>
+                            <Badge variant="outline" className="text-[9px] font-mono border-emerald-500/20 text-emerald-600 bg-emerald-500/5">
+                              {mod.contents.length} NỘI DUNG
+                            </Badge>
+                          </div>
+                          {mod.description && (
+                            <div className="text-[10px] text-muted-foreground mt-0.5 truncate">{mod.description}</div>
+                          )}
+                        </div>
+                      )}
                     </div>
-                  )}
 
-                  {/* Upload progress */}
-                  {isUploading && (
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-                        <span className="flex items-center gap-1">
-                          <Upload className="h-3 w-3 animate-pulse" />
-                          Đang upload lên Cloudinary...
-                        </span>
-                        <span>{uploadProgress}%</span>
+                    {!isEditing && (
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <Button
+                          variant="ghost"
+                          onClick={() => handleStartRenameModule(mod)}
+                          className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                          title="Sửa thông tin Module"
+                        >
+                          <Edit className="h-3.5 w-3.5" />
+                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger
+                            render={
+                              <Button
+                                variant="ghost"
+                                className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                                title="Xóa Module"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            }
+                          />
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Xác nhận xóa Module học?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Bạn có chắc chắn muốn xóa Module <strong>&ldquo;{mod.title}&rdquo;</strong>? Hành động này yêu cầu Module phải trống (không chứa bài học, quiz, viết luận nào) và không thể hoàn tác.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Hủy</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => handleDeleteModule(mod.id)}
+                                disabled={deleteModule.isPending}
+                              >
+                                {deleteModule.isPending ? "Đang xóa..." : "Xóa Module"}
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       </div>
-                      <Progress value={uploadProgress ?? 0} className="h-1.5" />
-                    </div>
-                  )}
+                    )}
+                  </div>
 
-                  {/* Upload button */}
-                  {!isUploading && !videoPublicId && (
-                    <>
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept="video/*"
-                        onChange={handleFileChange}
-                        className="hidden"
-                        id="video-upload"
-                      />
-                      <label
-                        htmlFor="video-upload"
-                        className="flex items-center justify-center gap-2 h-8 border border-border bg-background hover:bg-muted cursor-pointer rounded text-[10px] font-bold transition-colors"
-                      >
-                        <Upload className="h-3 w-3" />
-                        Chọn tệp video
-                      </label>
-                      <p className="text-[9px] text-muted-foreground text-center">
-                        Tối đa 500MB. Video sẽ được upload trực tiếp lên Cloudinary.
-                      </p>
-                    </>
+                  {/* Module Content list (Lessons, Quizzes, Essays) */}
+                  {isExpanded && (
+                    <CardContent className="p-3 space-y-2">
+                      {mod.contents.length === 0 ? (
+                        <p className="py-4 text-center text-xs text-muted-foreground italic bg-muted/10 rounded">Không có nội dung nào trong module này.</p>
+                      ) : (
+                        <div className="space-y-2.5">
+                          {mod.contents.map((item, itemIdx) => {
+                            let icon = <BookOpen className="h-3.5 w-3.5 text-blue-500" />;
+                            let badgeStyle = "border-blue-500/20 text-blue-600 bg-blue-500/5";
+                            let badgeName = "BÀI ĐỌC";
+                            let cardStyle = "hover:border-blue-500/20";
+
+                            if (item.type === "lesson" && (item.videoPublicId || item.videoUrl)) {
+                              icon = <Play className="h-3.5 w-3.5 text-indigo-500" />;
+                              badgeStyle = "border-indigo-500/20 text-indigo-600 bg-indigo-500/5";
+                              badgeName = "VIDEO";
+                              cardStyle = "hover:border-indigo-500/20";
+                            } else if (item.type === "quiz") {
+                              icon = <HelpCircle className="h-3.5 w-3.5 text-emerald-500" />;
+                              badgeStyle = "border-emerald-500/20 text-emerald-600 bg-emerald-500/5";
+                              badgeName = "TRẮC NGHIỆM";
+                              cardStyle = "hover:border-emerald-500/20";
+                            } else if (item.type === "writing") {
+                              icon = <PenTool className="h-3.5 w-3.5 text-amber-500" />;
+                              badgeStyle = "border-amber-500/20 text-amber-600 bg-amber-500/5";
+                              badgeName = "TẬP VIẾT AI";
+                              cardStyle = "hover:border-amber-500/20";
+                            }
+
+                            const isActive =
+                              (activeEditor.type === "edit_lesson" && activeEditor.lesson.id === item.id) ||
+                              (activeEditor.type === "edit_quiz" && activeEditor.quiz.id === item.id) ||
+                              (activeEditor.type === "edit_writing" && activeEditor.writing.id === item.id);
+
+                            return (
+                              <div
+                                key={item.id}
+                                className={`flex items-center justify-between gap-3 p-2.5 rounded-md border bg-background/50 hover:bg-background/80 transition-all duration-200 ${cardStyle} ${
+                                  isActive ? "border-emerald-500/50 bg-emerald-500/5 hover:bg-emerald-500/5 shadow-sm" : "border-border"
+                                }`}
+                              >
+                                {/* Left Item details */}
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  <div className="font-mono text-[10px] text-muted-foreground shrink-0 w-4">
+                                    {item.order}
+                                  </div>
+                                  <div className="p-1.5 rounded bg-muted shrink-0">
+                                    {icon}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <div className="text-xs font-bold text-foreground truncate">{item.title}</div>
+                                    <div className="flex items-center gap-1.5 mt-0.5">
+                                      <Badge variant="outline" className={`text-[8px] font-bold px-1 py-0 ${badgeStyle}`}>
+                                        {badgeName}
+                                      </Badge>
+                                      <Badge variant="outline" className={`text-[8px] font-bold px-1 py-0 uppercase ${
+                                        item.status === "published"
+                                          ? "border-emerald-500/20 text-emerald-600 bg-emerald-500/5"
+                                          : "border-amber-500/20 text-amber-600 bg-amber-500/5"
+                                      }`}>
+                                        {item.status}
+                                      </Badge>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Item operations */}
+                                <div className="flex items-center gap-1 shrink-0">
+                                  {/* Edit button */}
+                                  <Button
+                                    variant="outline"
+                                    onClick={() => {
+                                      if (item.type === "lesson") {
+                                        setActiveEditor({ type: "edit_lesson", lesson: item });
+                                      } else if (item.type === "quiz") {
+                                        setActiveEditor({ type: "edit_quiz", quiz: item });
+                                      } else if (item.type === "writing") {
+                                        setActiveEditor({ type: "edit_writing", writing: item });
+                                      }
+                                    }}
+                                    className="h-7 text-[10px] font-bold px-2 border"
+                                  >
+                                    SỬA
+                                  </Button>
+                                  {/* Delete button */}
+                                  <Button
+                                    variant="outline"
+                                    onClick={() => handleDeleteItem(item)}
+                                    className="h-7 text-[10px] font-bold px-2 text-destructive hover:bg-destructive hover:text-white"
+                                  >
+                                    XÓA
+                                  </Button>
+
+                                  {/* Reordering */}
+                                  <Button
+                                    variant="ghost"
+                                    disabled={itemIdx === 0 || reorderContent.isPending}
+                                    onClick={() => handleMove(mod, itemIdx, "UP")}
+                                    className="h-7 w-7 p-0 shrink-0 text-muted-foreground"
+                                  >
+                                    <ArrowUp className="h-3.5 w-3.5" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    disabled={itemIdx === mod.contents.length - 1 || reorderContent.isPending}
+                                    onClick={() => handleMove(mod, itemIdx, "DOWN")}
+                                    className="h-7 w-7 p-0 shrink-0 text-muted-foreground"
+                                  >
+                                    <ArrowDown className="h-3.5 w-3.5" />
+                                  </Button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* Add new items triggers row */}
+                      <div className="flex flex-wrap gap-2 pt-2.5 border-t border-dashed border-border justify-end">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setActiveEditor({ type: "new_lesson", moduleId: mod.id })}
+                          className="h-7 text-[9px] font-bold border-blue-500/20 text-blue-600 hover:bg-blue-500/5"
+                        >
+                          <Plus className="h-3 w-3 mr-1" /> + BÀI HỌC
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setActiveEditor({ type: "new_quiz", moduleId: mod.id })}
+                          className="h-7 text-[9px] font-bold border-emerald-500/20 text-emerald-600 hover:bg-emerald-500/5"
+                        >
+                          <Plus className="h-3 w-3 mr-1" /> + TRẮC NGHIỆM
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setActiveEditor({ type: "new_writing", moduleId: mod.id })}
+                          className="h-7 text-[9px] font-bold border-amber-500/20 text-amber-600 hover:bg-amber-500/5"
+                        >
+                          <Plus className="h-3 w-3 mr-1" /> + VIẾT LUẬN AI
+                        </Button>
+                      </div>
+                    </CardContent>
                   )}
+                </Card>
+              );
+            })
+          )}
+        </div>
+      </div>
+
+      {/* RIGHT COLUMN: DYNAMIC WORKSPACE EDITOR (1/3 width) */}
+      <div>
+        {activeEditor.type === "empty" ? (
+          <Card className="border border-border bg-card/40 backdrop-blur-md shadow-lg p-6 text-center sticky top-6">
+            <div className="py-12 flex flex-col items-center justify-center space-y-3.5">
+              <div className="p-4 rounded-full bg-muted text-muted-foreground/60 scale-110 mb-2">
+                <BookOpen className="h-7 w-7" />
+              </div>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Khu vực cấu hình học trình</h3>
+              <p className="text-[11px] text-muted-foreground/80 max-w-xs mx-auto leading-relaxed">
+                Nhấp vào nút <strong className="text-emerald-500">Sửa</strong> trên một bài học/bài tập có sẵn, hoặc nhấn các nút <strong className="text-emerald-500">Thêm mới (+)</strong> ở cuối mỗi Module để bắt đầu thiết lập.
+              </p>
+            </div>
+          </Card>
+        ) : activeEditor.type === "new_lesson" || activeEditor.type === "edit_lesson" ? (
+          <Card className="border border-border bg-card/60 backdrop-blur-md shadow-lg sticky top-6">
+            <CardHeader className="py-3 border-b border-border bg-muted/20 flex flex-row items-center justify-between">
+              <CardTitle className="text-xs font-bold uppercase tracking-wider text-foreground">
+                {activeEditor.type === "edit_lesson" ? "Sửa bài học" : "Thêm bài học mới"}
+              </CardTitle>
+              <Button variant="ghost" onClick={() => setActiveEditor({ type: "empty" })} className="h-6 w-6 p-0">
+                <X className="h-4 w-4" />
+              </Button>
+            </CardHeader>
+            <CardContent className="p-4">
+              <form onSubmit={handleLessonSubmit} className="space-y-4 text-xs">
+                <div className="flex flex-col gap-1.5">
+                  <Label className="font-bold uppercase text-muted-foreground">Tiêu đề bài học *</Label>
+                  <Input
+                    required
+                    value={lessonTitle}
+                    onChange={(e) => setLessonTitle(e.target.value)}
+                    placeholder="Nhập tiêu đề bài học..."
+                  />
                 </div>
 
-                {/* Hidden fields populated after upload */}
-                {videoPublicId && (
-                  <>
-                    <div className="flex flex-col gap-1">
-                      <label className="font-bold uppercase text-muted-foreground text-[10px]">
-                        Cloudinary Public ID
-                      </label>
-                      <Input
-                        value={videoPublicId}
-                        readOnly
-                        className="h-7 text-[10px] bg-muted/30"
-                      />
+                <div className="flex flex-col gap-1.5">
+                  <Label className="font-bold uppercase text-muted-foreground">Mô tả ngắn</Label>
+                  <Textarea
+                    value={lessonDescription}
+                    onChange={(e) => setLessonDescription(e.target.value)}
+                    placeholder="Mô tả tóm tắt nội dung bài giảng..."
+                    className="min-h-[60px]"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="flex flex-col gap-1.5">
+                    <Label className="font-bold uppercase text-muted-foreground">Loại bài học</Label>
+                    <select
+                      value={lessonType}
+                      onChange={(e) => setLessonType(e.target.value as "TEXT" | "VIDEO")}
+                      className="flex h-8 w-full border border-input bg-background px-2.5 py-1 text-xs text-foreground shadow-sm transition-colors outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50 disabled:opacity-50 dark:bg-input/30"
+                    >
+                      <option value="TEXT">Bài đọc (TEXT)</option>
+                      <option value="VIDEO">Bài giảng video (VIDEO)</option>
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label className="font-bold uppercase text-muted-foreground">Thứ tự (Order)</Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={lessonOrder}
+                      onChange={(e) => setLessonOrder(e.target.value)}
+                      placeholder="Trống = Tự tăng"
+                    />
+                  </div>
+                </div>
+
+                {/* Video Upload fields */}
+                {lessonType === "VIDEO" && (
+                  <div className="p-3 border border-dashed border-border bg-muted/20 space-y-3.5 rounded-md">
+                    <div className="flex flex-col gap-1.5">
+                      <Label className="font-bold uppercase text-muted-foreground text-[10px]">Tệp video bài giảng</Label>
+
+                      {videoPublicId && !isUploading && (
+                        <div className="flex items-center justify-between bg-indigo-500/10 border border-indigo-500/20 rounded px-2 py-1.5 text-[10px]">
+                          <span className="text-indigo-600 dark:text-indigo-400 truncate flex-1 font-mono">
+                            {videoPublicId}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setVideoPublicId("");
+                              setVideoUrl("");
+                            }}
+                            className="text-muted-foreground hover:text-destructive ml-2 shrink-0"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      )}
+
+                      {isUploading && (
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                            <span className="flex items-center gap-1">
+                              <Upload className="h-3 w-3 animate-pulse text-indigo-500" />
+                              Đang upload lên Cloudinary...
+                            </span>
+                            <span>{uploadProgress}%</span>
+                          </div>
+                          <Progress value={uploadProgress ?? 0} className="h-1.5" />
+                        </div>
+                      )}
+
+                      {!isUploading && !videoPublicId && (
+                        <>
+                          <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept="video/*"
+                            onChange={handleFileChange}
+                            className="hidden"
+                            id="video-upload"
+                          />
+                          <label
+                            htmlFor="video-upload"
+                            className="flex items-center justify-center gap-2 h-9 border border-border bg-background hover:bg-muted cursor-pointer rounded text-[10px] font-bold transition-colors"
+                          >
+                            <Upload className="h-3.5 w-3.5 text-indigo-500" />
+                            Chọn video từ thiết bị
+                          </label>
+                          <p className="text-[9px] text-muted-foreground text-center">Tối đa 500MB. Hệ thống sẽ tối ưu hóa luồng phát.</p>
+                        </>
+                      )}
                     </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="font-bold uppercase text-muted-foreground text-[10px]">
-                        Cloudinary Video URL
-                      </label>
-                      <Input
-                        value={videoUrl}
-                        readOnly
-                        className="h-7 text-[10px] bg-muted/30 truncate"
-                      />
-                    </div>
-                  </>
+                  </div>
                 )}
-              </div>
-            )}
 
-            <div className="flex flex-col gap-1.5">
-              <label className="font-bold uppercase text-muted-foreground">Trạng thái (Status)</label>
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value as "draft" | "published" | "archived")}
-                className="flex h-8 w-full border border-input bg-background px-2.5 py-1 text-xs text-foreground shadow-sm transition-colors outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50 disabled:opacity-50 dark:bg-input/30"
-              >
-                <option value="draft">DRAFT (Bản nháp)</option>
-                <option value="published">PUBLISHED (Xuất bản)</option>
-                <option value="archived">ARCHIVED (Lưu trữ)</option>
-              </select>
-            </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label className="font-bold uppercase text-muted-foreground">Trạng thái phát hành</Label>
+                  <select
+                    value={lessonStatus}
+                    onChange={(e) => setLessonStatus(e.target.value as any)}
+                    className="flex h-8 w-full border border-input bg-background px-2.5 py-1 text-xs text-foreground shadow-sm transition-colors outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50 disabled:opacity-50 dark:bg-input/30"
+                  >
+                    <option value="draft">Bản nháp (DRAFT)</option>
+                    <option value="published">Công khai (PUBLISHED)</option>
+                    <option value="archived">Lưu trữ (ARCHIVED)</option>
+                  </select>
+                </div>
 
-            <div className="flex justify-end gap-2 pt-2">
-              {editingLessonId && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={resetForm}
-                  className="font-bold"
-                >
-                  HỦY
-                </Button>
-              )}
-              <Button
-                type="submit"
-                disabled={createLesson.isPending || updateLesson.isPending || isUploading}
-                variant="default"
-                className="font-bold"
-              >
-                {createLesson.isPending || updateLesson.isPending
-                  ? "ĐANG LƯU..."
-                  : editingLessonId
-                  ? "CẬP NHẬT"
-                  : "THÊM MỚI"}
-              </Button>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button type="button" variant="outline" onClick={() => setActiveEditor({ type: "empty" })} className="font-bold">
+                    HỦY
+                  </Button>
+                  <Button type="submit" disabled={createLesson.isPending || updateLesson.isPending || isUploading} className="bg-blue-500 hover:bg-blue-600 font-bold text-white">
+                    {createLesson.isPending || updateLesson.isPending ? "ĐANG LƯU..." : activeEditor.type === "edit_lesson" ? "CẬP NHẬT" : "THÊM MỚI"}
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        ) : activeEditor.type === "new_quiz" || activeEditor.type === "edit_quiz" ? (
+          <div className="sticky top-6">
+            <AdminQuizBuilder
+              courseId={courseId}
+              moduleId={activeEditor.type === "new_quiz" ? activeEditor.moduleId : activeEditor.quiz.moduleId}
+              quiz={activeEditor.type === "edit_quiz" ? (activeEditor.quiz as any) : undefined}
+              onFinished={() => setActiveEditor({ type: "empty" })}
+            />
+          </div>
+        ) : activeEditor.type === "new_writing" || activeEditor.type === "edit_writing" ? (
+          <div className="sticky top-6">
+            <AdminWritingBuilder
+              courseId={courseId}
+              moduleId={activeEditor.type === "new_writing" ? activeEditor.moduleId : activeEditor.writing.moduleId}
+              writingAssignment={activeEditor.type === "edit_writing" ? (activeEditor.writing as any) : undefined}
+              onFinished={() => setActiveEditor({ type: "empty" })}
+            />
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }

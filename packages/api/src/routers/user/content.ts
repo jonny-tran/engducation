@@ -1,12 +1,16 @@
 import { TRPCError } from "@trpc/server";
-import { eq, and, inArray, asc, sql, type SQL } from "drizzle-orm";
+import { eq, and, asc, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
+import crypto from "node:crypto";
 
 import { router, protectedProcedure } from "../../index";
 import {
   courses,
+  modules,
   lessons,
   quizzes,
+  writingAssignments,
+  writingSubmissions,
   questions,
   answers,
   userProgress,
@@ -54,9 +58,12 @@ export const userContentRouter = router({
           offset,
           limit: pageSize,
           with: {
-            lessons: {
-              columns: { id: true },
-              orderBy: [asc(lessons.order)],
+            modules: {
+              with: {
+                lessons: { columns: { id: true } },
+                quizzes: { columns: { id: true } },
+                writingAssignments: { columns: { id: true } },
+              },
             },
           },
         }),
@@ -67,29 +74,47 @@ export const userContentRouter = router({
           .limit(1),
       ]);
 
-      const lessonIds = rows.flatMap((c) => c.lessons.map((l) => l.id));
-      const completedRows =
-        lessonIds.length > 0
-          ? await ctx.db
-              .select({ lessonId: userProgress.lessonId })
-              .from(userProgress)
-              .where(
-                and(
-                  eq(userProgress.userId, userId),
-                  eq(userProgress.status, "completed"),
-                  inArray(userProgress.lessonId, lessonIds),
-                ),
-              )
-          : [];
+      const progressRows = await ctx.db
+        .select({
+          lessonId: userProgress.lessonId,
+          quizId: userProgress.quizId,
+          writingId: userProgress.writingId,
+        })
+        .from(userProgress)
+        .where(
+          and(
+            eq(userProgress.userId, userId),
+            eq(userProgress.status, "completed"),
+          )
+        );
 
-      const completedSet = new Set(completedRows.map((r) => r.lessonId));
+      const completedLessons = new Set(progressRows.map((r) => r.lessonId).filter(Boolean));
+      const completedQuizzes = new Set(progressRows.map((r) => r.quizId).filter(Boolean));
+      const completedWritings = new Set(progressRows.map((r) => r.writingId).filter(Boolean));
 
       const enriched = rows.map((course) => {
-        const totalLessons = course.lessons.length;
-        const completedLessons = course.lessons.filter((l) =>
-          completedSet.has(l.id),
-        ).length;
-        return { ...course, totalLessons, completedLessons };
+        let totalItems = 0;
+        let completedItems = 0;
+
+        for (const mod of course.modules ?? []) {
+          const lCount = mod.lessons?.length ?? 0;
+          const qCount = mod.quizzes?.length ?? 0;
+          const wCount = mod.writingAssignments?.length ?? 0;
+          totalItems += lCount + qCount + wCount;
+
+          completedItems += (mod.lessons ?? []).filter((l) => completedLessons.has(l.id)).length;
+          completedItems += (mod.quizzes ?? []).filter((q) => completedQuizzes.has(q.id)).length;
+          completedItems += (mod.writingAssignments ?? []).filter((w) => completedWritings.has(w.id)).length;
+        }
+
+        return {
+          ...course,
+          totalItems,
+          completedItems,
+          // maintain compatibility fields
+          totalLessons: totalItems,
+          completedLessons: completedItems,
+        };
       });
 
       const total = Number(countResult[0]?.total ?? 0);
@@ -114,7 +139,20 @@ export const userContentRouter = router({
       const course = await ctx.db.query.courses.findFirst({
         where: eq(courses.id, courseId),
         with: {
-          lessons: { orderBy: [asc(lessons.order)] },
+          modules: {
+            orderBy: [asc(modules.order)],
+            with: {
+              lessons: {
+                orderBy: [asc(lessons.order)],
+              },
+              quizzes: {
+                orderBy: [asc(quizzes.order)],
+              },
+              writingAssignments: {
+                orderBy: [asc(writingAssignments.order)],
+              },
+            },
+          },
         },
       });
 
@@ -132,27 +170,46 @@ export const userContentRouter = router({
         });
       }
 
-      const lessonIds = course.lessons.map((l) => l.id);
-      const progressRows =
-        lessonIds.length > 0
-          ? await ctx.db.query.userProgress.findMany({
-              where: (tbl, { eq: dbEq, and: dbAnd }) =>
-                dbAnd(dbEq(tbl.userId, userId), inArray(tbl.lessonId, lessonIds)),
-            })
-          : [];
+      const progressRows = await ctx.db.query.userProgress.findMany({
+        where: (tbl, { eq: dbEq }) => dbEq(tbl.userId, userId),
+      });
 
-      const progressMap = new Map(
-        progressRows.map(
-          (p) => [p.lessonId, p.status as "learning" | "completed"],
-        ),
-      );
+      const progressMap = new Map<string, "learning" | "completed" | null>();
+      for (const p of progressRows) {
+        if (p.lessonId) progressMap.set(p.lessonId, p.status as any);
+        if (p.quizId) progressMap.set(p.quizId, p.status as any);
+        if (p.writingId) progressMap.set(p.writingId, p.status as any);
+      }
 
-      const lessonsWithProgress = course.lessons.map((lesson) => ({
-        ...lesson,
-        progressStatus: progressMap.get(lesson.id) ?? null,
-      }));
+      const modulesWithContents = (course.modules ?? []).map((mod) => {
+        const combined = [
+          ...(mod.lessons ?? []).map((l) => ({
+            ...l,
+            type: "lesson" as const,
+            progressStatus: progressMap.get(l.id) ?? null,
+          })),
+          ...(mod.quizzes ?? []).map((q) => ({
+            ...q,
+            type: "quiz" as const,
+            progressStatus: progressMap.get(q.id) ?? null,
+          })),
+          ...(mod.writingAssignments ?? []).map((w) => ({
+            ...w,
+            type: "writing" as const,
+            progressStatus: progressMap.get(w.id) ?? null,
+          })),
+        ].sort((a, b) => a.order - b.order);
 
-      return { ...course, lessons: lessonsWithProgress };
+        return {
+          ...mod,
+          contents: combined,
+        };
+      });
+
+      return {
+        ...course,
+        modules: modulesWithContents,
+      };
     }),
 
   // ─── LESSONS ─────────────────────────────────────────────
@@ -163,14 +220,8 @@ export const userContentRouter = router({
       const lesson = await ctx.db.query.lessons.findFirst({
         where: eq(lessons.id, input.lessonId),
         with: {
-          course: true,
-          quiz: {
-            with: {
-              questions: {
-                orderBy: [asc(questions.order)],
-                with: { answers: true },
-              },
-            },
+          module: {
+            with: { course: true }
           },
         },
       });
@@ -183,7 +234,7 @@ export const userContentRouter = router({
       }
 
       if (
-        lesson.course.status !== "published" ||
+        lesson.module.course.status !== "published" ||
         lesson.status !== "published"
       ) {
         throw new TRPCError({
@@ -192,27 +243,12 @@ export const userContentRouter = router({
         });
       }
 
-      // ── ANTI-CHEAT: strip correct answers before sending to client ──
-      const safeQuiz = lesson.quiz
-        ? {
-            ...lesson.quiz,
-            questions: lesson.quiz.questions.map((q) => ({
-              id: q.id,
-              content: q.content,
-              order: q.order,
-              answers: q.answers.map((a) => ({ id: a.id, content: a.content })),
-            })),
-          }
-        : null;
-
-      return { ...lesson, quiz: safeQuiz };
+      return lesson;
     }),
 
   lessonGetMediaUrl: protectedProcedure
     .input(z.object({ lessonId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
-      void ctx.session.user.id; // TODO: Premium gate
-
       const lesson = await ctx.db.query.lessons.findFirst({
         where: eq(lessons.id, input.lessonId),
       });
@@ -253,54 +289,94 @@ export const userContentRouter = router({
 
   // ─── PROGRESS ─────────────────────────────────────────────
 
-  trackLessonProgress: protectedProcedure
+  trackContentProgress: protectedProcedure
     .input(
       z.object({
-        lessonId: z.string().min(1),
+        lessonId: z.string().optional(),
+        quizId: z.string().optional(),
+        writingId: z.string().optional(),
         status: z.enum(["IN_PROGRESS", "COMPLETED"]),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
-      const { lessonId, status } = input;
+      const { lessonId, quizId, writingId, status } = input;
 
-      // Normalize frontend status enum → DB enum
-      const dbStatus = status === "IN_PROGRESS" ? "learning" : "completed";
-
-      const lesson = await ctx.db.query.lessons.findFirst({
-        where: eq(lessons.id, lessonId),
-      });
-      if (!lesson) {
+      if (!lessonId && !quizId && !writingId) {
         throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Bài học không tồn tại",
+          code: "BAD_REQUEST",
+          message: "Vui lòng cung cấp ít nhất một nội dung cần theo dõi tiến trình",
         });
       }
 
-      await ctx.db
-        .insert(userProgress)
-        .values({ userId, lessonId, status: dbStatus })
-        .onConflictDoUpdate({
-          target: [userProgress.userId, userProgress.lessonId],
-          set: { status: dbStatus, updatedAt: new Date() },
-        });
+      const dbStatus = status === "IN_PROGRESS" ? "learning" : "completed";
 
-      return ctx.db.query.userProgress.findFirst({
-        where: and(
-          eq(userProgress.userId, userId),
-          eq(userProgress.lessonId, lessonId),
-        ),
-      });
+      let existingProgress = null;
+      if (lessonId) {
+        existingProgress = await ctx.db.query.userProgress.findFirst({
+          where: and(
+            eq(userProgress.userId, userId),
+            eq(userProgress.lessonId, lessonId)
+          ),
+        });
+      } else if (quizId) {
+        existingProgress = await ctx.db.query.userProgress.findFirst({
+          where: and(
+            eq(userProgress.userId, userId),
+            eq(userProgress.quizId, quizId)
+          ),
+        });
+      } else if (writingId) {
+        existingProgress = await ctx.db.query.userProgress.findFirst({
+          where: and(
+            eq(userProgress.userId, userId),
+            eq(userProgress.writingId, writingId)
+          ),
+        });
+      }
+
+      if (existingProgress) {
+        await ctx.db
+          .update(userProgress)
+          .set({ status: dbStatus, updatedAt: new Date() })
+          .where(eq(userProgress.id, existingProgress.id));
+      } else {
+        const id = crypto.randomUUID();
+        await ctx.db.insert(userProgress).values({
+          id,
+          userId,
+          lessonId: lessonId ?? null,
+          quizId: quizId ?? null,
+          writingId: writingId ?? null,
+          status: dbStatus,
+        });
+      }
+
+      if (lessonId) {
+        return ctx.db.query.userProgress.findFirst({
+          where: and(eq(userProgress.userId, userId), eq(userProgress.lessonId, lessonId)),
+        });
+      } else if (quizId) {
+        return ctx.db.query.userProgress.findFirst({
+          where: and(eq(userProgress.userId, userId), eq(userProgress.quizId, quizId)),
+        });
+      } else if (writingId) {
+        return ctx.db.query.userProgress.findFirst({
+          where: and(eq(userProgress.userId, userId), eq(userProgress.writingId, writingId)),
+        });
+      }
+      return null;
     }),
 
   // ─── QUIZ ─────────────────────────────────────────────────
 
   getQuiz: protectedProcedure
-    .input(z.object({ lessonId: z.string().min(1) }))
+    .input(z.object({ quizId: z.string().min(1) }))
     .query(async ({ ctx, input }) => {
       const quiz = await ctx.db.query.quizzes.findFirst({
-        where: eq(quizzes.lessonId, input.lessonId),
+        where: eq(quizzes.id, input.quizId),
         with: {
+          module: { with: { course: true } },
           questions: {
             orderBy: [asc(questions.order)],
             with: { answers: true },
@@ -311,20 +387,13 @@ export const userContentRouter = router({
       if (!quiz) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "Bài tập không tồn tại cho bài học này",
+          message: "Bài tập không tồn tại",
         });
       }
 
-      // Load the lesson to check publication status
-      const lesson = await ctx.db.query.lessons.findFirst({
-        where: eq(lessons.id, input.lessonId),
-        with: { course: true },
-      });
-
       if (
-        !lesson ||
-        lesson.course.status !== "published" ||
-        lesson.status !== "published"
+        quiz.module.course.status !== "published" ||
+        quiz.status !== "published"
       ) {
         throw new TRPCError({
           code: "FORBIDDEN",
@@ -336,6 +405,7 @@ export const userContentRouter = router({
       return {
         id: quiz.id,
         title: quiz.title,
+        moduleId: quiz.moduleId,
         questions: quiz.questions.map((q) => ({
           id: q.id,
           content: q.content,
@@ -348,7 +418,7 @@ export const userContentRouter = router({
   submitQuiz: protectedProcedure
     .input(
       z.object({
-        lessonId: z.string().min(1),
+        quizId: z.string().min(1),
         answers: z
           .array(
             z.object({
@@ -361,13 +431,12 @@ export const userContentRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
-      const { lessonId, answers: submittedAnswers } = input;
+      const { quizId, answers: submittedAnswers } = input;
 
-      // ── Step 1: Resolve lesson → quiz ──────────────────────
       const quiz = await ctx.db.query.quizzes.findFirst({
-        where: eq(quizzes.lessonId, lessonId),
+        where: eq(quizzes.id, quizId),
         with: {
-          lesson: { with: { course: true } },
+          module: { with: { course: true } },
           questions: {
             with: {
               answers: {
@@ -386,8 +455,8 @@ export const userContentRouter = router({
       }
 
       if (
-        quiz.lesson.course.status !== "published" ||
-        quiz.lesson.status !== "published"
+        quiz.module.course.status !== "published" ||
+        quiz.status !== "published"
       ) {
         throw new TRPCError({
           code: "FORBIDDEN",
@@ -395,7 +464,6 @@ export const userContentRouter = router({
         });
       }
 
-      // ── Step 2: Build canonical maps (server-only) ──────────
       type CanonicalAnswer = {
         id: string;
         content: string;
@@ -419,8 +487,6 @@ export const userContentRouter = router({
         });
       }
 
-      // ── Step 3: Map client option labels ("A","B","C","D") → answer UUIDs ──
-      // We accept answers ordered by creation; map by position when client sends "A","B","C","D"
       const OPTION_ORDER = ["A", "B", "C", "D"] as const;
 
       function mapOptionToAnswerId(
@@ -440,7 +506,6 @@ export const userContentRouter = router({
         if (answerId) selectedAnswerMap.set(a.questionId, answerId);
       }
 
-      // ── Step 4: Score strictly on the server ────────────────
       let correctCount = 0;
       const answerResults: {
         questionId: string;
@@ -501,7 +566,6 @@ export const userContentRouter = router({
           ? Math.round((correctCount / totalQuestions) * 100)
           : 0;
 
-      // ── Step 5: Freeze snapshot (JSONB) ────────────────────
       const snapshot = answerResults.map((r) => {
         const canonicalQ = questionMap.get(r.questionId)!;
         const selectedA = canonicalQ.answers.find(
@@ -517,7 +581,6 @@ export const userContentRouter = router({
         };
       });
 
-      // ── Step 6: Persist attempt ────────────────────────────
       const attemptId = crypto.randomUUID();
       await ctx.db.insert(quizAttempts).values({
         id: attemptId,
@@ -527,15 +590,27 @@ export const userContentRouter = router({
         selectedAnswers: snapshot as unknown,
       });
 
-      // ── Step 7: Auto-complete lesson when score >= 70% ─────
       if (score >= 70) {
-        await ctx.db
-          .insert(userProgress)
-          .values({ userId, lessonId: quiz.lesson.id, status: "completed" })
-          .onConflictDoUpdate({
-            target: [userProgress.userId, userProgress.lessonId],
-            set: { status: "completed", updatedAt: new Date() },
+        const existingProgress = await ctx.db.query.userProgress.findFirst({
+          where: and(
+            eq(userProgress.userId, userId),
+            eq(userProgress.quizId, quizId)
+          ),
+        });
+
+        if (existingProgress) {
+          await ctx.db
+            .update(userProgress)
+            .set({ status: "completed", updatedAt: new Date() })
+            .where(eq(userProgress.id, existingProgress.id));
+        } else {
+          await ctx.db.insert(userProgress).values({
+            id: crypto.randomUUID(),
+            userId,
+            quizId,
+            status: "completed",
           });
+        }
       }
 
       return {
@@ -558,6 +633,239 @@ export const userContentRouter = router({
           eq(quizAttempts.quizId, input.quizId),
         ),
         orderBy: [asc(quizAttempts.createdAt)],
+      });
+    }),
+
+  // ─── WRITING ──────────────────────────────────────────────
+
+  writingGetDetail: protectedProcedure
+    .input(z.object({ writingId: z.string().min(1) }))
+    .query(async ({ ctx, input }) => {
+      const assignment = await ctx.db.query.writingAssignments.findFirst({
+        where: eq(writingAssignments.id, input.writingId),
+        with: {
+          module: {
+            with: { course: true }
+          },
+        },
+      });
+
+      if (!assignment) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Bài tập viết luận không tồn tại",
+        });
+      }
+
+      if (
+        assignment.module.course.status !== "published" ||
+        assignment.status !== "published"
+      ) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Bài tập viết luận này chưa được xuất bản",
+        });
+      }
+
+      return assignment;
+    }),
+
+  submitWriting: protectedProcedure
+    .input(
+      z.object({
+        writingId: z.string().min(1),
+        essay: z.string().min(1, "Bài viết không được để trống"),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      const { writingId, essay } = input;
+
+      const assignment = await ctx.db.query.writingAssignments.findFirst({
+        where: eq(writingAssignments.id, writingId),
+        with: { module: { with: { course: true } } },
+      });
+
+      if (!assignment) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Bài tập viết luận không tồn tại",
+        });
+      }
+
+      if (assignment.module.course.status !== "published" || assignment.status !== "published") {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Bài tập viết luận này chưa được xuất bản",
+        });
+      }
+
+      const wordCount = essay.trim().split(/\s+/).filter(Boolean).length;
+      if (assignment.wordLimit && wordCount > assignment.wordLimit * 1.5) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Bài viết vượt quá giới hạn số từ tối đa cho phép (${assignment.wordLimit} từ)`,
+        });
+      }
+
+      const corrections: Array<{
+        original: string;
+        corrected: string;
+        explanation: string;
+        startChar: number;
+        endChar: number;
+      }> = [];
+
+      const vocabUpgrades: Array<{
+        original: string;
+        upgrade: string;
+        level: "B2" | "C1" | "C2";
+        explanation: string;
+      }> = [];
+
+      const lowerEssay = essay.toLowerCase();
+
+      const matchIIs = essay.match(/\bI\s+is\b/i);
+      if (matchIIs && matchIIs.index !== undefined) {
+        corrections.push({
+          original: matchIIs[0],
+          corrected: "I am",
+          explanation: "Chủ ngữ 'I' luôn đi với động từ to-be 'am' ở thì hiện tại đơn, không đi với 'is'.",
+          startChar: matchIIs.index,
+          endChar: matchIIs.index + matchIIs[0].length,
+        });
+      }
+
+      const matchHeSheGo = essay.match(/\b(he|she|it)\s+go\b/i);
+      if (matchHeSheGo && matchHeSheGo.index !== undefined) {
+        corrections.push({
+          original: matchHeSheGo[0],
+          corrected: matchHeSheGo[1] + " goes",
+          explanation: "Chủ ngữ ngôi thứ ba số ít (he/she/it) yêu cầu động từ thêm đuôi '-es' ('goes') ở thì hiện tại đơn.",
+          startChar: matchHeSheGo.index,
+          endChar: matchHeSheGo.index + matchHeSheGo[0].length,
+        });
+      }
+
+      const matchEnglish = essay.match(/\benglish\b/);
+      if (matchEnglish && matchEnglish.index !== undefined) {
+        corrections.push({
+          original: matchEnglish[0],
+          corrected: "English",
+          explanation: "Tên ngôn ngữ và quốc gia luôn luôn phải viết hoa chữ cái đầu tiên.",
+          startChar: matchEnglish.index,
+          endChar: matchEnglish.index + matchEnglish[0].length,
+        });
+      }
+
+      const matchLowerI = essay.match(/\bi\s+/);
+      if (matchLowerI && matchLowerI.index !== undefined) {
+        corrections.push({
+          original: "i",
+          corrected: "I",
+          explanation: "Đại từ nhân xưng 'I' (tôi) luôn phải được viết hoa trong tiếng Anh.",
+          startChar: matchLowerI.index,
+          endChar: matchLowerI.index + 1,
+        });
+      }
+
+      if (lowerEssay.includes("good")) {
+        vocabUpgrades.push({
+          original: "good",
+          upgrade: "exceptional",
+          level: "C1",
+          explanation: "Thay thế từ 'good' thông thường bằng 'exceptional' (kiệt xuất, xuất chúng) để nâng tầm diễn đạt.",
+        });
+      }
+      if (lowerEssay.includes("bad")) {
+        vocabUpgrades.push({
+          original: "bad",
+          upgrade: "detrimental",
+          level: "C1",
+          explanation: "Từ 'detrimental' (gây hại, bất lợi) mang sắc thái học thuật cao hơn rất nhiều so với 'bad'.",
+        });
+      }
+      if (lowerEssay.includes("important")) {
+        vocabUpgrades.push({
+          original: "important",
+          upgrade: "paramount",
+          level: "C2",
+          explanation: "'Paramount' mang nghĩa là tối quan trọng, đứng đầu, giúp bài viết học thuật hơn.",
+        });
+      }
+      if (lowerEssay.includes("very")) {
+        vocabUpgrades.push({
+          original: "very",
+          upgrade: "profoundly",
+          level: "C1",
+          explanation: "Sử dụng trạng từ chỉ mức độ 'profoundly' thay cho 'very' để bổ nghĩa cho các tính từ diễn tả cảm xúc hoặc tính chất sâu sắc.",
+        });
+      }
+
+      let baseScore = 90;
+      if (corrections.length > 0) baseScore -= corrections.length * 8;
+      if (vocabUpgrades.length > 0) baseScore += vocabUpgrades.length * 3;
+      const finalScore = Math.max(40, Math.min(100, baseScore));
+
+      const overallFeedback = corrections.length === 0 
+        ? "Bài viết của bạn rất tốt! Cấu trúc ngữ pháp hoàn thiện, diễn đạt lưu loát và tự nhiên. Hãy tiếp tục phát huy ở các bài luận tiếp theo."
+        : `Bài viết khá tốt và thể hiện được ý tưởng mạch lạc. Tuy nhiên, vẫn còn một số lỗi ngữ pháp cơ bản cần khắc phục như chia động từ và viết hoa. Cố gắng sử dụng thêm các từ vựng nâng cao đã được gợi ý để cải thiện điểm số.`;
+
+      const aiFeedback = {
+        overallFeedback,
+        corrections,
+        vocabUpgrades,
+        wordCount,
+      };
+
+      const submissionId = crypto.randomUUID();
+      await ctx.db.insert(writingSubmissions).values({
+        id: submissionId,
+        userId,
+        writingId,
+        essay,
+        score: finalScore,
+        feedback: aiFeedback,
+      });
+
+      const existingProgress = await ctx.db.query.userProgress.findFirst({
+        where: and(
+          eq(userProgress.userId, userId),
+          eq(userProgress.writingId, writingId)
+        ),
+      });
+
+      if (existingProgress) {
+        await ctx.db
+          .update(userProgress)
+          .set({ status: "completed", updatedAt: new Date() })
+          .where(eq(userProgress.id, existingProgress.id));
+      } else {
+        await ctx.db.insert(userProgress).values({
+          id: crypto.randomUUID(),
+          userId,
+          writingId,
+          status: "completed",
+        });
+      }
+
+      return {
+        submissionId,
+        score: finalScore,
+        feedback: aiFeedback,
+      };
+    }),
+
+  writingSubmissionsHistory: protectedProcedure
+    .input(z.object({ writingId: z.string().min(1) }))
+    .query(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      return ctx.db.query.writingSubmissions.findMany({
+        where: and(
+          eq(writingSubmissions.userId, userId),
+          eq(writingSubmissions.writingId, input.writingId)
+        ),
+        orderBy: [asc(writingSubmissions.createdAt)],
       });
     }),
 });

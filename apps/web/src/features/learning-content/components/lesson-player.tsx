@@ -20,7 +20,7 @@ interface LessonPlayerProps {
 }
 
 export function LessonPlayer({ courseId, lesson, onTakeQuiz }: LessonPlayerProps) {
-  const { trackProgress, getMediaUrl } = useStudentLearning(courseId);
+  const { trackContentProgress, getMediaUrl } = useStudentLearning(courseId);
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [expiresAt, setExpiresAt] = useState<Date | null>(null);
   const [isLoadingVideo, setIsLoadingVideo] = useState(false);
@@ -52,7 +52,7 @@ export function LessonPlayer({ courseId, lesson, onTakeQuiz }: LessonPlayerProps
     // Call IN_PROGRESS tracking on page mount/change for this lesson
     if (lesson.id && trackingInitiated.current !== lesson.id) {
       trackingInitiated.current = lesson.id;
-      trackProgress.mutate({
+      trackContentProgress.mutate({
         lessonId: lesson.id,
         status: "IN_PROGRESS",
       });
@@ -98,7 +98,7 @@ export function LessonPlayer({ courseId, lesson, onTakeQuiz }: LessonPlayerProps
 
   const handleVideoPlay = () => {
     // Double safeguard to track in progress when playback actually starts
-    trackProgress.mutate({
+    trackContentProgress.mutate({
       lessonId: lesson.id,
       status: "IN_PROGRESS",
     });
@@ -106,14 +106,14 @@ export function LessonPlayer({ courseId, lesson, onTakeQuiz }: LessonPlayerProps
 
   const handleVideoEnded = () => {
     // Video ended event - track completed
-    trackProgress.mutate({
+    trackContentProgress.mutate({
       lessonId: lesson.id,
       status: "COMPLETED",
     });
   };
 
   const handleMarkCompleteManual = () => {
-    trackProgress.mutate({
+    trackContentProgress.mutate({
       lessonId: lesson.id,
       status: "COMPLETED",
     });
@@ -188,11 +188,11 @@ export function LessonPlayer({ courseId, lesson, onTakeQuiz }: LessonPlayerProps
             </p>
             <Button
               onClick={handleMarkCompleteManual}
-              disabled={trackProgress.isPending}
+              disabled={trackContentProgress.isPending}
               variant="default"
               className="w-full text-xs font-bold"
             >
-              {trackProgress.isPending ? "ĐANG LƯU..." : "ĐÁNH DẤU HOÀN THÀNH (MARK COMPLETE)"}
+              {trackContentProgress.isPending ? "ĐANG LƯU..." : "ĐÁNH DẤU HOÀN THÀNH (MARK COMPLETE)"}
             </Button>
           </div>
         )}
@@ -204,10 +204,10 @@ export function LessonPlayer({ courseId, lesson, onTakeQuiz }: LessonPlayerProps
               <Button
                 variant="outline"
                 onClick={handleMarkCompleteManual}
-                disabled={trackProgress.isPending}
+                disabled={trackContentProgress.isPending}
                 className="text-xs font-bold"
               >
-                {trackProgress.isPending ? "ĐANG LƯU..." : "ĐÁNH DẤU HOÀN THÀNH THỦ CÔNG"}
+                {trackContentProgress.isPending ? "ĐANG LƯU..." : "ĐÁNH DẤU HOÀN THÀNH THỦ CÔNG"}
               </Button>
             )}
           </div>

@@ -1,6 +1,6 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { authClient } from "@/lib/auth-client";
+import { auth } from "@engducation/auth";
 import { StudentWelcomeView } from "@/features/learning-content";
 import UserProfileActions from "./user-profile-actions";
 import { ModeToggle } from "@/components/ui/mode-toggle";
@@ -12,11 +12,8 @@ interface PageProps {
 export default async function UserProfilePage({ params }: PageProps) {
   const { userId } = await params;
 
-  const session = await authClient.getSession({
-    fetchOptions: {
-      headers: await headers(),
-      throw: true,
-    },
+  const session = await auth.api.getSession({
+    headers: await headers(),
   });
 
   if (!session?.user) {

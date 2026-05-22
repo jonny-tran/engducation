@@ -95,9 +95,15 @@ export default function CourseDetailPage({ params }: PageProps) {
     );
   }
 
-  const lessons = courseDetail.lessons ?? [];
-  const completedCount = lessons.filter((l) => l.progressStatus === "completed").length;
-  const totalCount = lessons.length;
+  const allContents = React.useMemo(() => {
+    return (courseDetail.modules ?? []).flatMap((m) => m.contents ?? []);
+  }, [courseDetail]);
+
+  const completedCount = React.useMemo(() => {
+    return allContents.filter((c) => c.progressStatus === "completed").length;
+  }, [allContents]);
+
+  const totalCount = allContents.length;
   const percentComplete = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
   // Map CEFR levels to premium visual themes
@@ -200,7 +206,7 @@ export default function CourseDetailPage({ params }: PageProps) {
             </Badge>
           </div>
 
-          {lessons.length === 0 ? (
+          {(courseDetail.modules ?? []).length === 0 ? (
             <Card className="p-16 border border-dashed border-border rounded-3xl bg-muted/10 flex flex-col items-center justify-center text-center space-y-3">
               <span className="text-3xl">📭</span>
               <div className="font-bold text-xs text-foreground">Chưa có đề cương bài giảng</div>
@@ -209,91 +215,132 @@ export default function CourseDetailPage({ params }: PageProps) {
               </p>
             </Card>
           ) : (
-            <div className="space-y-3.5">
-              {lessons.map((lesson, index) => {
-                const hasVideo = lesson.videoUrl || lesson.videoPublicId;
-                const isCompleted = lesson.progressStatus === "completed";
-                const isLearning = lesson.progressStatus === "learning";
-                
-                // Color-code the status checks
-                let statusBadge = (
-                  <Badge variant="outline" className="text-[9px] font-black uppercase text-slate-400 bg-slate-500/5 border-slate-500/10 px-2 py-0.5 rounded-full flex items-center gap-1">
-                    <Lock className="h-2.5 w-2.5" /> CHƯA HỌC
-                  </Badge>
-                );
-                
-                if (isCompleted) {
-                  statusBadge = (
-                    <Badge className="text-[9px] font-black uppercase bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-sm shadow-emerald-500/5">
-                      <CheckCircle2 className="h-2.5 w-2.5 fill-emerald-500/10" /> ĐÃ XONG
-                    </Badge>
-                  );
-                } else if (isLearning) {
-                  statusBadge = (
-                    <Badge className="text-[9px] font-black uppercase bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/20 px-2.5 py-0.5 rounded-full flex items-center gap-1 animate-pulse shadow-sm shadow-amber-500/5">
-                      <Play className="h-2.5 w-2.5 fill-current" /> ĐANG HỌC
-                    </Badge>
-                  );
-                }
+            <div className="space-y-6">
+              {(courseDetail.modules ?? []).map((mod, modIdx) => (
+                <div key={mod.id} className="space-y-3">
+                  <div className="flex flex-col gap-1 border-l-2 border-indigo-500 pl-3">
+                    <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest">
+                      Module {modIdx + 1}
+                    </span>
+                    <h3 className="font-bold text-sm text-foreground uppercase tracking-wide">
+                      {mod.title}
+                    </h3>
+                    {mod.description && (
+                      <p className="text-[11px] text-muted-foreground leading-relaxed">
+                        {mod.description}
+                      </p>
+                    )}
+                  </div>
 
-                return (
-                  <Card 
-                    key={lesson.id} 
-                    className={`border transition-all duration-300 rounded-2xl shadow-sm ${
-                      isCompleted 
-                        ? 'border-emerald-500/10 bg-emerald-500/[0.01]' 
-                        : isLearning
-                          ? 'border-indigo-500/25 bg-indigo-500/[0.01]'
-                          : 'border-border/60 hover:border-border hover:bg-muted/10'
-                    }`}
-                  >
-                    <CardContent className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                      <div className="flex items-start gap-3.5 max-w-full sm:max-w-[70%]">
-                        {/* Linear sequence number */}
-                        <div className={`h-8 w-8 rounded-xl font-mono font-black text-xs flex items-center justify-center shrink-0 border select-none ${
-                          isCompleted
-                            ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400'
-                            : isLearning
-                              ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-600 dark:text-indigo-400'
-                              : 'bg-muted border-border text-muted-foreground'
-                        }`}>
-                          {lesson.order}
-                        </div>
-
-                        <div className="space-y-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-bold text-xs text-foreground line-clamp-1">
-                              {lesson.title}
-                            </span>
-                            <Badge variant="outline" className="text-[8px] font-bold px-1.5 py-0 h-4 border-muted-foreground/30 text-muted-foreground uppercase font-mono">
-                              {hasVideo ? "VIDEO" : "TÀI LIỆU"}
-                            </Badge>
-                          </div>
-                          <p className="text-[10px] text-muted-foreground font-medium line-clamp-2 leading-relaxed">
-                            {lesson.description ?? "Bài học lý thuyết giúp củng cố từ vựng và cấu trúc ngữ pháp thông dụng."}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Right elements: Status & Action Button */}
-                      <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0">
-                        {statusBadge}
+                  <div className="space-y-3 pl-3">
+                    {(mod.contents ?? []).length === 0 ? (
+                      <p className="text-[10px] italic text-muted-foreground py-2">
+                        Chưa có nội dung học tập nào trong module này.
+                      </p>
+                    ) : (
+                      (mod.contents ?? []).map((item, itemIdx) => {
+                        const isCompleted = item.progressStatus === "completed";
+                        const isLearning = item.progressStatus === "learning";
                         
-                        <Link href={`/lessons/${lesson.id}` as any}>
-                          <Button 
-                            size="sm" 
-                            variant={isCompleted ? "outline" : "default"}
-                            className="h-7 text-[10px] font-bold rounded-xl flex items-center gap-1 shadow-sm px-3.5"
+                        let IconComponent = BookOpen;
+                        let typeText = "BÀI GIẢNG";
+                        let typeBadgeClass = "border-sky-500/20 text-sky-600 dark:text-sky-400 bg-sky-500/5";
+                        
+                        if (item.type === "quiz") {
+                          IconComponent = CheckCircle2;
+                          typeText = "TRẮC NGHIỆM";
+                          typeBadgeClass = "border-emerald-500/20 text-emerald-600 dark:text-emerald-400 bg-emerald-500/5";
+                        } else if (item.type === "writing") {
+                          IconComponent = Sparkles;
+                          typeText = "VIẾT LUẬN";
+                          typeBadgeClass = "border-amber-500/20 text-amber-600 dark:text-amber-400 bg-amber-500/5";
+                        }
+
+                        // Color-code the status checks
+                        let statusBadge = (
+                          <Badge variant="outline" className="text-[9px] font-black uppercase text-slate-400 bg-slate-500/5 border-slate-500/10 px-2 py-0.5 rounded-full flex items-center gap-1">
+                            <Lock className="h-2.5 w-2.5" /> CHƯA HỌC
+                          </Badge>
+                        );
+                        
+                        if (isCompleted) {
+                          statusBadge = (
+                            <Badge className="text-[9px] font-black uppercase bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-sm shadow-emerald-500/5">
+                              <CheckCircle2 className="h-2.5 w-2.5 fill-emerald-500/10" /> ĐÃ XONG
+                            </Badge>
+                          );
+                        } else if (isLearning) {
+                          statusBadge = (
+                            <Badge className="text-[9px] font-black uppercase bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/20 px-2.5 py-0.5 rounded-full flex items-center gap-1 animate-pulse shadow-sm shadow-amber-500/5">
+                              <Play className="h-2.5 w-2.5 fill-current" /> ĐANG HỌC
+                            </Badge>
+                          );
+                        }
+
+                        return (
+                          <Card 
+                            key={item.id} 
+                            className={`border transition-all duration-300 rounded-2xl shadow-sm ${
+                              isCompleted 
+                                ? 'border-emerald-500/10 bg-emerald-500/[0.01]' 
+                                : isLearning
+                                  ? 'border-indigo-500/25 bg-indigo-500/[0.01]'
+                                  : 'border-border/60 hover:border-border hover:bg-muted/10'
+                            }`}
                           >
-                            Học ngay
-                            <ChevronRight className="h-3 w-3" />
-                          </Button>
-                        </Link>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
+                            <CardContent className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                              <div className="flex items-start gap-3.5 max-w-full sm:max-w-[70%]">
+                                <div className={`h-8 w-8 rounded-xl font-mono font-black text-xs flex items-center justify-center shrink-0 border select-none ${
+                                  isCompleted
+                                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+                                    : isLearning
+                                      ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-600 dark:text-indigo-400'
+                                      : 'bg-muted border-border text-muted-foreground'
+                                }`}>
+                                  {item.order}
+                                </div>
+
+                                <div className="space-y-1">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className="font-bold text-xs text-foreground line-clamp-1">
+                                      {item.title}
+                                    </span>
+                                    <Badge variant="outline" className={`text-[8px] font-bold px-1.5 py-0 h-4 border uppercase font-mono ${typeBadgeClass}`}>
+                                      {typeText}
+                                    </Badge>
+                                  </div>
+                                  <p className="text-[10px] text-muted-foreground font-medium line-clamp-2 leading-relaxed">
+                                    {item.type === "lesson"
+                                      ? (item.description ?? "Bài học đọc hoặc video lý thuyết.")
+                                      : item.type === "writing"
+                                      ? (item.prompt ?? "Bài tập viết luận củng cố kỹ năng.")
+                                      : "Bài tập trắc nghiệm củng cố từ vựng và kiến thức ngữ pháp."}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0">
+                                {statusBadge}
+                                
+                                <Link href={`/courses/${courseId}/learn?contentId=${item.id}&type=${item.type}` as any}>
+                                  <Button 
+                                    size="sm" 
+                                    variant={isCompleted ? "outline" : "default"}
+                                    className="h-7 text-[10px] font-bold rounded-xl flex items-center gap-1 shadow-sm px-3.5"
+                                  >
+                                    Học ngay
+                                    <ChevronRight className="h-3 w-3" />
+                                  </Button>
+                                </Link>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>

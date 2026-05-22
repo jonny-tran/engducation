@@ -6,12 +6,15 @@ import crypto from "node:crypto";
 import { router, adminProcedure } from "../../index";
 import {
   courses,
+  modules,
   lessons,
   quizzes,
+  writingAssignments,
   questions,
   answers,
   userProgress,
 } from "@engducation/db/schema";
+
 
 // ==========================================
 // SHARED SCHEMAS
@@ -30,12 +33,24 @@ const createCourseSchema = z.object({
   status: contentStatusSchema.default("draft"),
 });
 
-const updateCourseSchema = createCourseSchema.partial();
+
+// ─── Module ───────────────────────────────────────────────────
+
+const createModuleSchema = z.object({
+  courseId: z.string().min(1),
+  title: z.string().min(1, "Tiêu đề không được để trống"),
+  description: z.string().optional(),
+  order: z.number().int().min(1).optional(),
+});
+
+const updateModuleSchema = createModuleSchema
+  .partial()
+  .omit({ courseId: true });
 
 // ─── Lesson ──────────────────────────────────────────────────
 
 const createLessonSchema = z.object({
-  courseId: z.string().min(1),
+  moduleId: z.string().min(1),
   title: z.string().min(1, "Tiêu đề không được để trống"),
   description: z.string().optional(),
   videoPublicId: z.string().optional(),
@@ -46,16 +61,34 @@ const createLessonSchema = z.object({
 
 const updateLessonSchema = createLessonSchema
   .partial()
-  .omit({ courseId: true });
+  .omit({ moduleId: true });
+
+// ─── Writing Assignment ────────────────────────────────────────
+
+const createWritingSchema = z.object({
+  moduleId: z.string().min(1),
+  title: z.string().min(1, "Tiêu đề không được để trống"),
+  prompt: z.string().min(1, "Đề bài không được để trống"),
+  rubric: z.string().min(1, "Thang điểm và tiêu chí không được để trống"),
+  wordLimit: z.number().int().min(1).optional(),
+  suggestedAnswer: z.string().optional(),
+  order: z.number().int().min(1).optional(),
+  status: contentStatusSchema.default("draft"),
+});
+
+const updateWritingSchema = createWritingSchema
+  .partial()
+  .omit({ moduleId: true });
 
 // ─── Reorder ─────────────────────────────────────────────────
 
-const reorderLessonsSchema = z.object({
-  courseId: z.string().min(1),
+const reorderContentSchema = z.object({
+  moduleId: z.string().min(1),
   movements: z
     .array(
       z.object({
         id: z.string().min(1),
+        type: z.enum(["lesson", "quiz", "writing"]),
         order: z.number().int().min(1),
       }),
     )
@@ -66,8 +99,10 @@ const reorderLessonsSchema = z.object({
 
 const upsertQuizSchema = z.object({
   quizId: z.string().optional(),
-  lessonId: z.string().min(1),
+  moduleId: z.string().min(1),
   title: z.string().min(1, "Tiêu đề bài tập không được để trống"),
+  order: z.number().int().min(1).optional(),
+  status: contentStatusSchema.default("draft"),
   questions: z
     .array(
       z.object({
@@ -104,6 +139,7 @@ const addQuestionSchema = z.object({
     )
     .min(2, "Mỗi câu hỏi cần ít nhất 2 đáp án"),
 });
+
 
 // ==========================================
 // ROUTER
@@ -147,7 +183,15 @@ export const adminContentRouter = router({
           orderBy: [asc(courses.createdAt)],
           offset,
           limit: pageSize,
-          with: { lessons: { columns: { id: true } } },
+          with: {
+            modules: {
+              with: {
+                lessons: { columns: { id: true } },
+                quizzes: { columns: { id: true } },
+                writingAssignments: { columns: { id: true } },
+              },
+            },
+          },
         }),
         ctx.db
           .select({ total: sql<number>`count(*)` })
@@ -159,7 +203,16 @@ export const adminContentRouter = router({
       const total = Number(countResult[0]?.total ?? 0);
 
       return {
-        items: rows.map((c) => ({ ...c, lessonCount: c.lessons.length })),
+        items: rows.map((c) => {
+          const lessonCount = (c.modules ?? []).reduce(
+            (acc, m) => acc + (m.lessons ?? []).length,
+            0,
+          );
+          return {
+            ...c,
+            lessonCount,
+          };
+        }),
         pagination: {
           page,
           pageSize,
@@ -181,24 +234,17 @@ export const adminContentRouter = router({
         level: input.level,
         status: input.status,
       });
-
-      const created = await ctx.db.query.courses.findFirst({
-        where: eq(courses.id, id),
-      });
-      if (!created) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Tạo khóa học thất bại",
-        });
-      }
-      return created;
+      return { id };
     }),
 
   courseUpdate: adminProcedure
-    .input(updateCourseSchema.extend({ id: z.string().min(1) }))
+    .input(
+      createCourseSchema
+        .partial()
+        .extend({ id: z.string().min(1) })
+    )
     .mutation(async ({ ctx, input }) => {
       const { id, ...rest } = input;
-
       const existing = await ctx.db.query.courses.findFirst({
         where: eq(courses.id, id),
       });
@@ -211,22 +257,25 @@ export const adminContentRouter = router({
 
       await ctx.db
         .update(courses)
-        .set({ ...rest, updatedAt: new Date() })
+        .set({
+          ...rest,
+          updatedAt: new Date(),
+        })
         .where(eq(courses.id, id));
 
-      return ctx.db.query.courses.findFirst({ where: eq(courses.id, id) });
+      return { id };
     }),
 
   courseDelete: adminProcedure
     .input(z.object({ id: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
-      const activeLessons = await ctx.db.query.lessons.findMany({
-        where: eq(lessons.courseId, input.id),
+      const activeModules = await ctx.db.query.modules.findMany({
+        where: eq(modules.courseId, input.id),
       });
-      if (activeLessons.length > 0) {
+      if (activeModules.length > 0) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
-          message: `Không thể xóa khóa học đang có ${activeLessons.length} bài học. Hãy xóa toàn bộ bài học trước.`,
+          message: `Không thể xóa khóa học đang có ${activeModules.length} tuần/module học. Hãy xóa toàn bộ module trước.`,
         });
       }
 
@@ -234,10 +283,10 @@ export const adminContentRouter = router({
       return { deleted: true };
     }),
 
-  // ─── LESSONS ──────────────────────────────────────────────
+  // ─── MODULES ──────────────────────────────────────────────
 
-  lessonCreate: adminProcedure
-    .input(createLessonSchema)
+  moduleCreate: adminProcedure
+    .input(createModuleSchema)
     .mutation(async ({ ctx, input }) => {
       const existingCourse = await ctx.db.query.courses.findFirst({
         where: eq(courses.id, input.courseId),
@@ -254,17 +303,117 @@ export const adminContentRouter = router({
         order = input.order;
       } else {
         const maxRow = await ctx.db
-          .select({ maxOrder: sql<number>`max(${lessons.order})` })
-          .from(lessons)
-          .where(eq(lessons.courseId, input.courseId))
+          .select({ maxOrder: sql<number>`max(${modules.order})` })
+          .from(modules)
+          .where(eq(modules.courseId, input.courseId))
           .limit(1);
         order = (maxRow[0]?.maxOrder ?? 0) + 1;
       }
 
       const id = crypto.randomUUID();
-      await ctx.db.insert(lessons).values({
+      await ctx.db.insert(modules).values({
         id,
         courseId: input.courseId,
+        title: input.title,
+        description: input.description ?? null,
+        order,
+      });
+
+      const created = await ctx.db.query.modules.findFirst({
+        where: eq(modules.id, id),
+      });
+      if (!created) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Tạo module học thất bại",
+        });
+      }
+      return created;
+    }),
+
+  moduleUpdate: adminProcedure
+    .input(updateModuleSchema.extend({ id: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      const { id, ...rest } = input;
+
+      const existing = await ctx.db.query.modules.findFirst({
+        where: eq(modules.id, id),
+      });
+      if (!existing) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Module học không tồn tại",
+        });
+      }
+
+      await ctx.db
+        .update(modules)
+        .set({ ...rest, updatedAt: new Date() })
+        .where(eq(modules.id, id));
+
+      return ctx.db.query.modules.findFirst({ where: eq(modules.id, id) });
+    }),
+
+  moduleDelete: adminProcedure
+    .input(z.object({ id: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      const existing = await ctx.db.query.modules.findFirst({
+        where: eq(modules.id, input.id),
+        with: {
+          lessons: { columns: { id: true } },
+          quizzes: { columns: { id: true } },
+          writingAssignments: { columns: { id: true } },
+        },
+      });
+      if (!existing) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Module học không tồn tại",
+        });
+      }
+
+      const totalItems =
+        (existing.lessons?.length ?? 0) +
+        (existing.quizzes?.length ?? 0) +
+        (existing.writingAssignments?.length ?? 0);
+
+      if (totalItems > 0) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: `Không thể xóa module đang có ${totalItems} nội dung (bài học, quiz, viết luận). Hãy xóa toàn bộ nội dung trước.`,
+        });
+      }
+
+      await ctx.db.delete(modules).where(eq(modules.id, input.id));
+      return { deleted: true };
+    }),
+
+  // ─── LESSONS ──────────────────────────────────────────────
+
+  lessonCreate: adminProcedure
+    .input(createLessonSchema)
+    .mutation(async ({ ctx, input }) => {
+      const existingModule = await ctx.db.query.modules.findFirst({
+        where: eq(modules.id, input.moduleId),
+      });
+      if (!existingModule) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Module không tồn tại",
+        });
+      }
+
+      let order: number;
+      if (input.order !== undefined) {
+        order = input.order;
+      } else {
+        order = (await getMaxOrderInModule(ctx.db, input.moduleId)) + 1;
+      }
+
+      const id = crypto.randomUUID();
+      await ctx.db.insert(lessons).values({
+        id,
+        moduleId: input.moduleId,
         title: input.title,
         description: input.description ?? null,
         videoPublicId: input.videoPublicId ?? null,
@@ -325,22 +474,138 @@ export const adminContentRouter = router({
       return { deleted: true };
     }),
 
-  lessonReorder: adminProcedure
-    .input(reorderLessonsSchema)
-    .mutation(async ({ ctx, input }) => {
-      const { courseId, movements } = input;
+  // ─── WRITING ASSIGNMENTS ──────────────────────────────────
 
-      const validLessons = await ctx.db.query.lessons.findMany({
-        where: eq(lessons.courseId, courseId),
-        columns: { id: true },
+  writingCreate: adminProcedure
+    .input(createWritingSchema)
+    .mutation(async ({ ctx, input }) => {
+      const existingModule = await ctx.db.query.modules.findFirst({
+        where: eq(modules.id, input.moduleId),
       });
-      const validIds = new Set(validLessons.map((l) => l.id));
+      if (!existingModule) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Module không tồn tại",
+        });
+      }
+
+      let order: number;
+      if (input.order !== undefined) {
+        order = input.order;
+      } else {
+        order = (await getMaxOrderInModule(ctx.db, input.moduleId)) + 1;
+      }
+
+      const id = crypto.randomUUID();
+      await ctx.db.insert(writingAssignments).values({
+        id,
+        moduleId: input.moduleId,
+        title: input.title,
+        prompt: input.prompt,
+        rubric: input.rubric,
+        wordLimit: input.wordLimit ?? null,
+        suggestedAnswer: input.suggestedAnswer ?? null,
+        order,
+        status: input.status,
+      });
+
+      const created = await ctx.db.query.writingAssignments.findFirst({
+        where: eq(writingAssignments.id, id),
+      });
+      if (!created) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Tạo bài tập viết luận thất bại",
+        });
+      }
+      return created;
+    }),
+
+  writingUpdate: adminProcedure
+    .input(updateWritingSchema.extend({ id: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      const { id, ...rest } = input;
+
+      const existing = await ctx.db.query.writingAssignments.findFirst({
+        where: eq(writingAssignments.id, id),
+      });
+      if (!existing) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Bài tập viết luận không tồn tại",
+        });
+      }
+
+      await ctx.db
+        .update(writingAssignments)
+        .set({ ...rest, updatedAt: new Date() })
+        .where(eq(writingAssignments.id, id));
+
+      return ctx.db.query.writingAssignments.findFirst({
+        where: eq(writingAssignments.id, id),
+      });
+    }),
+
+  writingDelete: adminProcedure
+    .input(z.object({ id: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      const existing = await ctx.db.query.writingAssignments.findFirst({
+        where: eq(writingAssignments.id, input.id),
+      });
+      if (!existing) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Bài tập viết luận không tồn tại",
+        });
+      }
+
+      await ctx.db.delete(writingAssignments).where(eq(writingAssignments.id, input.id));
+      return { deleted: true };
+    }),
+
+  // ─── QUIZZES & GENERAL REORDER ────────────────────────────
+
+  contentReorder: adminProcedure
+    .input(reorderContentSchema)
+    .mutation(async ({ ctx, input }) => {
+      const { moduleId, movements } = input;
+
+      const [moduleLessons, moduleQuizzes, moduleWritings] = await Promise.all([
+        ctx.db.query.lessons.findMany({
+          where: eq(lessons.moduleId, moduleId),
+          columns: { id: true },
+        }),
+        ctx.db.query.quizzes.findMany({
+          where: eq(quizzes.moduleId, moduleId),
+          columns: { id: true },
+        }),
+        ctx.db.query.writingAssignments.findMany({
+          where: eq(writingAssignments.moduleId, moduleId),
+          columns: { id: true },
+        }),
+      ]);
+
+      const validLessonIds = new Set(moduleLessons.map((l) => l.id));
+      const validQuizIds = new Set(moduleQuizzes.map((q) => q.id));
+      const validWritingIds = new Set(moduleWritings.map((w) => w.id));
 
       for (const m of movements) {
-        if (!validIds.has(m.id)) {
+        if (m.type === "lesson" && !validLessonIds.has(m.id)) {
           throw new TRPCError({
             code: "BAD_REQUEST",
-            message: `Bài học "${m.id}" không thuộc khóa học này`,
+            message: `Bài học "${m.id}" không thuộc module này`,
+          });
+        }
+        if (m.type === "quiz" && !validQuizIds.has(m.id)) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `Bài trắc nghiệm "${m.id}" không thuộc module này`,
+          });
+        }
+        if (m.type === "writing" && !validWritingIds.has(m.id)) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `Bài viết luận "${m.id}" không thuộc module này`,
           });
         }
       }
@@ -353,7 +618,7 @@ export const adminContentRouter = router({
         if (count > 1) {
           throw new TRPCError({
             code: "BAD_REQUEST",
-            message: `Thứ tự ${order} bị lặp trong payload sắp xếp`,
+            message: `Thứ tự ${order} bị trùng lặp trong danh sách sắp xếp`,
           });
         }
       }
@@ -362,44 +627,56 @@ export const adminContentRouter = router({
       const reservedBase = -(minOrder + movements.length + 100);
 
       await ctx.db.transaction(async (tx) => {
+        // Step A: Move to temp negative values to avoid Unique Constraints
         for (let i = 0; i < movements.length; i++) {
-          await tx
-            .update(lessons)
-            .set({ order: reservedBase - i, updatedAt: new Date() })
-            .where(
-              and(
-                eq(lessons.courseId, courseId),
-                eq(lessons.id, movements[i]!.id),
-              ),
-            );
+          const m = movements[i]!;
+          const tempOrder = reservedBase - i;
+          if (m.type === "lesson") {
+            await tx
+              .update(lessons)
+              .set({ order: tempOrder, updatedAt: new Date() })
+              .where(and(eq(lessons.moduleId, moduleId), eq(lessons.id, m.id)));
+          } else if (m.type === "quiz") {
+            await tx
+              .update(quizzes)
+              .set({ order: tempOrder, updatedAt: new Date() })
+              .where(and(eq(quizzes.moduleId, moduleId), eq(quizzes.id, m.id)));
+          } else if (m.type === "writing") {
+            await tx
+              .update(writingAssignments)
+              .set({ order: tempOrder, updatedAt: new Date() })
+              .where(and(eq(writingAssignments.moduleId, moduleId), eq(writingAssignments.id, m.id)));
+          }
         }
 
+        // Step B: Update to final desired order
         for (const m of movements) {
-          await tx
-            .update(lessons)
-            .set({ order: m.order, updatedAt: new Date() })
-            .where(
-              and(
-                eq(lessons.courseId, courseId),
-                eq(lessons.id, m.id),
-              ),
-            );
+          if (m.type === "lesson") {
+            await tx
+              .update(lessons)
+              .set({ order: m.order, updatedAt: new Date() })
+              .where(and(eq(lessons.moduleId, moduleId), eq(lessons.id, m.id)));
+          } else if (m.type === "quiz") {
+            await tx
+              .update(quizzes)
+              .set({ order: m.order, updatedAt: new Date() })
+              .where(and(eq(quizzes.moduleId, moduleId), eq(quizzes.id, m.id)));
+          } else if (m.type === "writing") {
+            await tx
+              .update(writingAssignments)
+              .set({ order: m.order, updatedAt: new Date() })
+              .where(and(eq(writingAssignments.moduleId, moduleId), eq(writingAssignments.id, m.id)));
+          }
         }
       });
 
-      const reordered = await ctx.db.query.lessons.findMany({
-        where: eq(lessons.courseId, courseId),
-        orderBy: [asc(lessons.order)],
-      });
-      return reordered;
+      return { success: true };
     }),
-
-  // ─── QUIZZES ──────────────────────────────────────────────
 
   quizUpsertStructure: adminProcedure
     .input(upsertQuizSchema)
     .mutation(async ({ ctx, input }) => {
-      const { quizId: existingQuizId, lessonId, title, questions: questionsInput } =
+      const { quizId: existingQuizId, moduleId, title, order: inputOrder, status, questions: questionsInput } =
         input;
 
       for (const q of questionsInput) {
@@ -412,13 +689,13 @@ export const adminContentRouter = router({
         }
       }
 
-      const existingLesson = await ctx.db.query.lessons.findFirst({
-        where: eq(lessons.id, lessonId),
+      const existingModule = await ctx.db.query.modules.findFirst({
+        where: eq(modules.id, moduleId),
       });
-      if (!existingLesson) {
+      if (!existingModule) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "Bài học không tồn tại",
+          message: "Module học không tồn tại",
         });
       }
 
@@ -429,7 +706,7 @@ export const adminContentRouter = router({
         if (existingQuizId) {
           await tx
             .update(quizzes)
-            .set({ title, updatedAt: now })
+            .set({ title, status, updatedAt: now })
             .where(eq(quizzes.id, existingQuizId));
 
           const existingQs = await tx
@@ -442,10 +719,20 @@ export const adminContentRouter = router({
         } else {
           const newId = crypto.randomUUID();
           resolvedQuizId = newId;
+
+          let order: number;
+          if (inputOrder !== undefined) {
+            order = inputOrder;
+          } else {
+            order = (await getMaxOrderInModule(tx, moduleId)) + 1;
+          }
+
           await tx.insert(quizzes).values({
             id: newId,
-            lessonId,
+            moduleId,
             title,
+            order,
+            status: status ?? "draft",
           });
         }
       });
@@ -453,7 +740,7 @@ export const adminContentRouter = router({
       if (!resolvedQuizId) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: "Tạo bài tập thất bại",
+          message: "Tạo hoặc cập nhật bài tập thất bại",
         });
       }
 
@@ -524,7 +811,7 @@ export const adminContentRouter = router({
         for (const a of answersInput) {
           await tx.insert(answers).values({
             id: a.id,
-            questionId,
+            questionId: questionId,
             content: a.content,
             isCorrect: a.isCorrect,
           });
@@ -568,16 +855,23 @@ export const adminContentRouter = router({
       const course = await ctx.db.query.courses.findFirst({
         where: eq(courses.id, courseId),
         with: {
-          lessons: {
-            orderBy: [asc(lessons.order)],
+          modules: {
+            orderBy: [asc(modules.order)],
             with: {
-              quiz: {
+              lessons: {
+                orderBy: [asc(lessons.order)],
+              },
+              quizzes: {
+                orderBy: [asc(quizzes.order)],
                 with: {
                   questions: {
                     orderBy: [asc(questions.order)],
                     with: { answers: true },
                   },
                 },
+              },
+              writingAssignments: {
+                orderBy: [asc(writingAssignments.order)],
               },
             },
           },
@@ -591,13 +885,30 @@ export const adminContentRouter = router({
         });
       }
 
-      return course;
+      // Map modules to combine and sort lessons, quizzes, and writingAssignments linearly by order
+      const modulesWithContents = (course.modules ?? []).map((mod) => {
+        const combined = [
+          ...(mod.lessons ?? []).map((l) => ({ ...l, type: "lesson" as const })),
+          ...(mod.quizzes ?? []).map((q) => ({ ...q, type: "quiz" as const })),
+          ...(mod.writingAssignments ?? []).map((w) => ({ ...w, type: "writing" as const })),
+        ].sort((a, b) => a.order - b.order);
+
+        return {
+          ...mod,
+          contents: combined,
+        };
+      });
+
+      return {
+        ...course,
+        modules: modulesWithContents,
+      };
     }),
 
   // ─── DASHBOARD STATS ──────────────────────────────────────
 
   dashboardStats: adminProcedure.query(async ({ ctx }) => {
-    const [courseCount, lessonCount, quizCount, userCount] =
+    const [courseCount, lessonCount, quizCount, writingCount, userCount] =
       await Promise.all([
         ctx.db
           .select({ count: sql<number>`count(*)` })
@@ -613,6 +924,10 @@ export const adminContentRouter = router({
           .limit(1),
         ctx.db
           .select({ count: sql<number>`count(*)` })
+          .from(writingAssignments)
+          .limit(1),
+        ctx.db
+          .select({ count: sql<number>`count(*)` })
           .from(userProgress)
           .limit(1),
       ]);
@@ -621,8 +936,22 @@ export const adminContentRouter = router({
       totalCourses: Number(courseCount[0]?.count ?? 0),
       totalLessons: Number(lessonCount[0]?.count ?? 0),
       totalQuizzes: Number(quizCount[0]?.count ?? 0),
+      totalWritingAssignments: Number(writingCount[0]?.count ?? 0),
       totalProgressLogs: Number(userCount[0]?.count ?? 0),
     };
   }),
 });
+
+async function getMaxOrderInModule(db: any, moduleId: string): Promise<number> {
+  const [maxLesson, maxQuiz, maxWriting] = await Promise.all([
+    db.select({ max: sql<number>`max(${lessons.order})` }).from(lessons).where(eq(lessons.moduleId, moduleId)),
+    db.select({ max: sql<number>`max(${quizzes.order})` }).from(quizzes).where(eq(quizzes.moduleId, moduleId)),
+    db.select({ max: sql<number>`max(${writingAssignments.order})` }).from(writingAssignments).where(eq(writingAssignments.moduleId, moduleId)),
+  ]);
+  return Math.max(
+    Number(maxLesson[0]?.max ?? 0),
+    Number(maxQuiz[0]?.max ?? 0),
+    Number(maxWriting[0]?.max ?? 0)
+  );
+}
 

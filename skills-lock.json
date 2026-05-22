@@ -7,6 +7,24 @@
       "skillPath": "better-auth/best-practices/SKILL.md",
       "computedHash": "a4c830509e85557b59339d8d93a4e243e9e59c686e7678854d39230e12c2a6dc"
     },
+    "cloudinary-docs": {
+      "source": "cloudinary-devs/skills",
+      "sourceType": "github",
+      "skillPath": "skills/cloudinary-docs/SKILL.md",
+      "computedHash": "008ae2171abcd39257acb7393c04560e1825f98d79616e755f05a79bf39b058a"
+    },
+    "cloudinary-react": {
+      "source": "cloudinary-devs/skills",
+      "sourceType": "github",
+      "skillPath": "skills/cloudinary-react/SKILL.md",
+      "computedHash": "ca9de3d607bdd0886909cac415954226cae1430aef3038c13c1bff58ce574dad"
+    },
+    "cloudinary-transformations": {
+      "source": "cloudinary-devs/skills",
+      "sourceType": "github",
+      "skillPath": "skills/cloudinary-transformations/SKILL.md",
+      "computedHash": "8038bfd19e7c750f80082ed1ba16538e9772537c793f91448572421122445d75"
+    },
     "elysiajs": {
       "source": "elysiajs/skills",
       "sourceType": "github",

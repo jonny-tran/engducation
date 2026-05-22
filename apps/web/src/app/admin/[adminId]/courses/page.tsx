@@ -5,7 +5,6 @@ import { trpc } from "@/utils/trpc";
 import { useCourseMutations } from "@/features/learning-content";
 import { AdminCourseForm } from "@/features/learning-content";
 import { AdminLessonManager } from "@/features/learning-content";
-import { AdminQuizBuilder } from "@/features/learning-content";
 import { Button } from "@engducation/ui/components/button";
 import { Input } from "@engducation/ui/components/input";
 import { Card, CardContent } from "@engducation/ui/components/card";
@@ -38,7 +37,6 @@ export default function AdminCoursesPage() {
   // Course selection state
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
   const [editingCourse, setEditingCourse] = useState<any | null>(null);
-  const [selectedLesson, setSelectedLesson] = useState<any | null>(null);
 
   // Delete confirmation
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string; lessonCount: number } | null>(null);
@@ -87,7 +85,6 @@ export default function AdminCoursesPage() {
       await deleteCourse.mutateAsync({ id: deleteTarget.id });
       if (selectedCourseId === deleteTarget.id) {
         setSelectedCourseId(null);
-        setSelectedLesson(null);
       }
     } catch {
       // Error is already handled in the mutation hook
@@ -195,7 +192,6 @@ export default function AdminCoursesPage() {
                         }`}
                         onClick={() => {
                           setSelectedCourseId(course.id);
-                          setSelectedLesson(null);
                         }}
                       >
                         <div className="flex items-start justify-between gap-2">
@@ -324,7 +320,7 @@ export default function AdminCoursesPage() {
                             {courseDetail.status}
                           </Badge>
                           <span className="text-[10px] text-muted-foreground">
-                            {courseDetail.lessons.length} bài học
+                            {(courseDetail.modules ?? []).reduce((acc, m) => acc + (m.contents ?? []).filter(c => c.type === 'lesson').length, 0)} bài giảng · {(courseDetail.modules ?? []).reduce((acc, m) => acc + (m.contents ?? []).filter(c => c.type === 'quiz').length, 0)} trắc nghiệm · {(courseDetail.modules ?? []).reduce((acc, m) => acc + (m.contents ?? []).filter(c => c.type === 'writing').length, 0)} tự luận
                           </span>
                         </div>
                       </div>
@@ -333,7 +329,6 @@ export default function AdminCoursesPage() {
                         size="sm"
                         onClick={() => {
                           setSelectedCourseId(null);
-                          setSelectedLesson(null);
                         }}
                         className="h-7 text-[10px] font-bold"
                       >
@@ -345,21 +340,8 @@ export default function AdminCoursesPage() {
 
                 <AdminLessonManager
                   courseId={selectedCourseId}
-                  lessons={courseDetail.lessons}
-                  onSelectLessonForQuiz={(lesson) => {
-                    const matched = courseDetail.lessons.find((l) => l.id === lesson.id);
-                    setSelectedLesson(matched);
-                  }}
+                  modules={courseDetail.modules}
                 />
-
-                {selectedLesson && (
-                  <AdminQuizBuilder
-                    courseId={selectedCourseId}
-                    lesson={
-                      courseDetail.lessons.find((l) => l.id === selectedLesson.id) ?? selectedLesson
-                    }
-                  />
-                )}
               </div>
             ) : null}
           </div>
