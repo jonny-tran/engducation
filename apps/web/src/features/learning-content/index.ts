@@ -18,4 +18,9 @@ export { StudentWelcomeView } from "./components/student-welcome-view";
 export { VocabularyCard } from "./components/vocabulary-card";
 export { StudentVocabularyView } from "./components/student-vocabulary-view";
 export { StudentNotebookView } from "./components/student-notebook-view";
+export { CourseListTable } from "./components/course-list-table";
+export { ModuleAccordionList } from "./components/module-accordion-list";
+export { AdminWritingBuilder } from "./components/admin-writing-builder";
+
+
 
