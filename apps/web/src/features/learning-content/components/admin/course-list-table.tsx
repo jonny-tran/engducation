@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { trpc } from "@/utils/trpc";
 import { useCourseMutations } from "../../hooks/use-course-mutations";
 import { AdminCourseForm } from "./admin-course-form";
+import { AdminHeaderBanner } from "./admin-course-header-banner";
 import { Button } from "@engducation/ui/components/button";
 import { Input } from "@engducation/ui/components/input";
 import { Card, CardContent } from "@engducation/ui/components/card";
@@ -44,7 +45,7 @@ import {
   AlertDialogTitle,
 } from "@engducation/ui/components/alert-dialog";
 import { Tabs, TabsList, TabsTrigger } from "@engducation/ui/components/tabs";
-import { Search, X, Plus, Edit2, Trash2, Globe, Lock, MoreVertical, BookOpen, Layers } from "lucide-react";
+import { Search, X, Plus, Edit2, Trash2, Globe, Lock, MoreVertical, BookOpen, Layers, Sparkles } from "lucide-react";
 
 interface CourseListTableProps {
   adminId: string;
@@ -125,23 +126,20 @@ export function CourseListTable({ adminId }: CourseListTableProps) {
 
   return (
     <div className="space-y-6">
-      {/* Header section with Premium Dashboard Styling */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-slate-900 via-rose-950/20 to-slate-900 p-6 rounded-2xl border border-border/80 shadow-lg">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-foreground via-rose-400 to-rose-500 bg-clip-text text-transparent">
-            Quản Lý Khóa Học
-          </h1>
-          <p className="text-xs text-muted-foreground mt-1">
-            Xây dựng, cấu trúc, xuất bản và giảng dạy của bạn.
-          </p>
-        </div>
-        <Button
-          onClick={handleCreateCourse}
-          className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md shadow-rose-600/20 rounded-xl transition-all hover:scale-[1.02] shrink-0"
-        >
-          <Plus className="h-4 w-4 mr-1.5" /> Tạo khóa học mới
-        </Button>
-      </div>
+      {/* Reusable Header Banner */}
+      <AdminHeaderBanner
+        title="Quản Lý Khóa Học"
+        subtitle="Xây dựng, cấu trúc, xuất bản và giảng dạy của bạn."
+        icon={<Sparkles className="h-5 w-5" />}
+        rightAction={
+          <Button
+            onClick={handleCreateCourse}
+            className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md shadow-rose-600/20 rounded-xl transition-all hover:scale-[1.02] shrink-0"
+          >
+            <Plus className="h-4 w-4 mr-1.5" /> Tạo khóa học mới
+          </Button>
+        }
+      />
 
       {/* Elegant Premium Tabs for switching between Active and Deleted courses */}
       <div className="w-full border-b border-border/40 pb-1">
@@ -365,11 +363,10 @@ export function CourseListTable({ adminId }: CourseListTableProps) {
                       <TableCell className="p-4 text-center">
                         <Badge
                           variant="outline"
-                          className={`text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.5 ${
-                            course.status === "published"
-                              ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/25"
-                              : "bg-amber-500/10 text-amber-600 border-amber-500/25"
-                          }`}
+                          className={`text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.5 ${course.status === "published"
+                            ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/25"
+                            : "bg-amber-500/10 text-amber-600 border-amber-500/25"
+                            }`}
                         >
                           {course.status === "published" ? "Hoạt động" : "Bản nháp"}
                         </Badge>

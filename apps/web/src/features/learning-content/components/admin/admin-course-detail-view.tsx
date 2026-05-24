@@ -2,10 +2,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { trpc } from "@/utils/trpc";
 import { AdminCourseForm } from "./admin-course-form";
+import { AdminHeaderBanner } from "./admin-course-header-banner";
 import { ModuleAccordionList } from "../shared/module-accordion-list";
 import { Button } from "@engducation/ui/components/button";
 import { Skeleton } from "@engducation/ui/components/skeleton";
-import { ArrowLeft, BookOpen, Layers, Settings, ChevronRight } from "lucide-react";
+import { ArrowLeft, BookOpen, Layers, Settings, ChevronRight, Award, Coins } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -87,32 +88,17 @@ export function AdminCourseDetailView({ adminId, courseId }: AdminCourseDetailVi
       </header>
 
       <div className="flex-1 p-6 max-w-7xl w-full mx-auto space-y-6">
-        {/* Navigation / Intro Widget */}
-        <div className="bg-gradient-to-r from-slate-900 via-rose-950/15 to-slate-900 p-5 rounded-2xl border border-border/80 shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-start gap-3">
-            <div className="p-2 bg-rose-500/10 rounded-xl text-rose-500 mt-0.5">
-              <BookOpen className="h-5 w-5" />
-            </div>
-            <div>
-              <h1 className="text-base font-bold text-foreground truncate max-w-md md:max-w-xl">
-                {courseDetail.title}
-              </h1>
-              <p className="text-[10px] font-mono text-muted-foreground mt-0.5 select-all">
-                ID Khóa học: {courseDetail.id}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="text-right hidden md:block">
-              <div className="text-xs font-bold text-foreground">
-                {(courseDetail.modules ?? []).length} Học phần
-              </div>
-              <div className="text-[10px] text-muted-foreground mt-0.5">
-                Cấu trúc lộ trình đào tạo
-              </div>
-            </div>
-          </div>
-        </div>
+        {/* Reusable Course Header Banner */}
+        <AdminHeaderBanner
+          title={courseDetail.title}
+          courseId={courseDetail.id}
+          icon={<BookOpen className="h-5 w-5" />}
+          stats={[
+            { label: "Học phần", value: (courseDetail.modules ?? []).length, icon: <Layers className="h-4 w-4" />, color: "rose" },
+            { label: "Trình độ", value: courseDetail.level, icon: <Award className="h-4 w-4" />, color: "blue" },
+            { label: "Chi phí", value: courseDetail.price === 0 ? "MIỄN PHÍ" : `${courseDetail.price.toLocaleString("vi-VN")}đ`, icon: <Coins className="h-4 w-4" />, color: "emerald" },
+          ]}
+        />
 
         {/* Dynamic Two-Column Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">

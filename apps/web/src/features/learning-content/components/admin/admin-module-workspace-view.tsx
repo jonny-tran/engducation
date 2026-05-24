@@ -10,6 +10,7 @@ import { useCloudinaryUpload } from "../../hooks/use-cloudinary-upload";
 import { AdminQuizBuilder } from "./admin-quiz-builder";
 import { AdminWritingBuilder } from "./admin-writing-builder";
 import { AdminVocabularyManager, useVocabularyMutations } from "@/features/vocabulary";
+import { AdminHeaderBanner } from "./admin-course-header-banner";
 import { Button } from "@engducation/ui/components/button";
 import { Input } from "@engducation/ui/components/input";
 import { Textarea } from "@engducation/ui/components/textarea";
@@ -747,28 +748,21 @@ export function AdminModuleWorkspaceView({ adminId, courseId, moduleId }: AdminM
               </div>
             ) : (
               <div className="space-y-6">
-                <div className="bg-gradient-to-r from-slate-900 via-rose-950/10 to-slate-900 p-5 rounded-2xl border border-border/80 shadow-xs flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-rose-500/10 rounded-xl text-rose-500">
-                      <BookMarked className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <h2 className="text-sm font-bold text-foreground uppercase tracking-wide">
-                        Quản lý Từ vựng Học phần
-                      </h2>
-                      <p className="text-[10px] text-muted-foreground mt-0.5">
-                        Thêm và biên soạn danh mục từ vựng học thuật trực thuộc học phần này.
-                      </p>
-                    </div>
-                  </div>
-                  <Button
-                    onClick={() => setActiveEditor({ type: "new_vocab" })}
-                    size="sm"
-                    className="h-8 text-[10px] font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-xl px-3.5 shadow-xs shrink-0"
-                  >
-                    <Plus className="h-3.5 w-3.5 mr-1" /> Thêm từ mới
-                  </Button>
-                </div>
+                {/* Reusable Header Banner */}
+                <AdminHeaderBanner
+                  title="Quản lý Từ vựng Học phần"
+                  subtitle="Thêm và biên soạn danh mục từ vựng học thuật trực thuộc học phần này."
+                  icon={<BookMarked className="h-5 w-5" />}
+                  rightAction={
+                    <Button
+                      onClick={() => setActiveEditor({ type: "new_vocab" })}
+                      size="sm"
+                      className="h-8 text-[10px] font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-xl px-3.5 shadow-xs shrink-0"
+                    >
+                      <Plus className="h-3.5 w-3.5 mr-1" /> Thêm từ mới
+                    </Button>
+                  }
+                />
 
                 <Card className="border border-border/60 bg-card/30 backdrop-blur-md shadow-xs rounded-2xl overflow-hidden">
                   <CardHeader className="py-4 border-b border-border/50 bg-muted/5">
