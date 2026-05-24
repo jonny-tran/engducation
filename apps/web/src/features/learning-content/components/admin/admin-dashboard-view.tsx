@@ -3,10 +3,9 @@ import { useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { trpc } from "@/utils/trpc";
-import { useCourseMutations } from "../hooks/use-course-mutations";
+import { useCourseMutations } from "../../hooks/use-course-mutations";
 import { AdminCourseForm } from "./admin-course-form";
 import { AdminLessonManager } from "./admin-lesson-manager";
-import { AdminQuizBuilder } from "./admin-quiz-builder";
 import { Button } from "@engducation/ui/components/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@engducation/ui/components/card";
 import { Badge } from "@engducation/ui/components/badge";
@@ -15,7 +14,7 @@ export function AdminDashboardView() {
   const router = useRouter();
   const params = useParams();
   const adminId = params.adminId as string;
-  const { deleteCourse, updateCourse, publishCourse } = useCourseMutations();
+  const { deleteCourse, publishCourse } = useCourseMutations();
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
   const [editingCourse, setEditingCourse] = useState<any | null>(null);
 
@@ -31,8 +30,6 @@ export function AdminDashboardView() {
       { enabled: !!selectedCourseId }
     )
   );
-
-
 
   const handleDeleteCourse = async (id: string) => {
     if (confirm("Bạn có chắc chắn muốn xóa khóa học này?")) {
@@ -148,7 +145,7 @@ export function AdminDashboardView() {
                                 variant="outline"
                                 size="sm"
                                 onClick={async () => {
-                                  await publishCourse.mutateAsync({ courseId: course.id });
+                                    await publishCourse.mutateAsync({ courseId: course.id });
                                 }}
                                 className="text-[10px] font-bold border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/10"
                                 disabled={publishCourse.isPending}

@@ -5,7 +5,6 @@ import { authClient } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { LogOut } from "lucide-react";
-import Link from "next/link";
 import { useState } from "react";
 
 export default function UserProfileActions() {

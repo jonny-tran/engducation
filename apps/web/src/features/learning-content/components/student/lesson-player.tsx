@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState, useRef } from "react";
-import { useStudentLearning } from "../hooks/use-student-learning";
+import { useStudentLearning } from "../../hooks/use-student-learning";
 import { Button } from "@engducation/ui/components/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@engducation/ui/components/card";
 import { Badge } from "@engducation/ui/components/badge";

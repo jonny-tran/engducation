@@ -1,10 +1,10 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
-import { useLessonMutations } from "../hooks/use-lesson-mutations";
-import { useModuleMutations } from "../hooks/use-module-mutations";
-import { useWritingMutations } from "../hooks/use-writing-mutations";
-import { useQuizMutations } from "../hooks/use-quiz-mutations";
-import { useCloudinaryUpload } from "../hooks/use-cloudinary-upload";
+import { useLessonMutations } from "../../hooks/use-lesson-mutations";
+import { useModuleMutations } from "../../hooks/use-module-mutations";
+import { useWritingMutations } from "../../hooks/use-writing-mutations";
+import { useQuizMutations } from "../../hooks/use-quiz-mutations";
+import { useCloudinaryUpload } from "../../hooks/use-cloudinary-upload";
 import { AdminQuizBuilder } from "./admin-quiz-builder";
 import { AdminWritingBuilder } from "./admin-writing-builder";
 import { Button } from "@engducation/ui/components/button";
@@ -50,16 +50,13 @@ interface PeerItem {
   order: number;
   status: string;
   type: "lesson" | "quiz" | "writing";
-  // Lesson specific
   description?: string | null;
   videoPublicId?: string | null;
   videoUrl?: string | null;
-  // Writing specific
   prompt?: string;
   rubric?: string;
   wordLimit?: number | null;
   suggestedAnswer?: string | null;
-  // Quiz specific
   questions?: any[];
 }
 
@@ -190,16 +187,16 @@ export function AdminLessonManager({ courseId, modules, onManageVocabulary }: Ad
   }, [activeEditor]);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+    const file = (e.target as HTMLInputElement).files?.[0];
     if (!file) return;
 
     if (!file.type.startsWith("video/")) {
-      alert("Vui lòng chọn tệp video hợp lệ");
+      window.alert("Vui lòng chọn tệp video hợp lệ");
       return;
     }
 
     if (file.size > 500 * 1024 * 1024) {
-      alert("Tệp video quá lớn (tối đa 500MB)");
+      window.alert("Tệp video quá lớn (tối đa 500MB)");
       return;
     }
 

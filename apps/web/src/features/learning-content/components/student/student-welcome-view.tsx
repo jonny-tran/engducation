@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { trpc } from "@/utils/trpc";
-import { Card, CardHeader, CardTitle, CardContent } from "@engducation/ui/components/card";
+import { Card, CardContent } from "@engducation/ui/components/card";
 import { Button } from "@engducation/ui/components/button";
 import { Badge } from "@engducation/ui/components/badge";
 import { Progress } from "@engducation/ui/components/progress";

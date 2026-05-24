@@ -1,8 +1,6 @@
 "use client";
-import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { trpc } from "@/utils/trpc";
-import { useStudentLearning } from "../hooks/use-student-learning";
+import { useWritingWorkspace } from "../../hooks/use-writing-workspace";
+import { GrammarDiffViewer } from "../shared/grammar-diff-viewer";
 import { Button } from "@engducation/ui/components/button";
 import { Textarea } from "@engducation/ui/components/textarea";
 import { Card, CardHeader, CardTitle, CardContent } from "@engducation/ui/components/card";
@@ -16,7 +14,6 @@ import {
   AlertTriangle,
   History,
   CheckCircle,
-  HelpCircle,
   TrendingUp,
 } from "lucide-react";
 
@@ -27,48 +24,20 @@ interface WritingWorkspaceProps {
 }
 
 export function WritingWorkspace({ writingId, courseId, onComplete }: WritingWorkspaceProps) {
-  const { submitWriting } = useStudentLearning(courseId);
-  const [essay, setEssay] = useState("");
-  const [activeSubmission, setActiveSubmission] = useState<any | null>(null);
-
-  // Fetch writing assignment details
-  const { data: assignment, isLoading: isAssignmentLoading } = useQuery(
-    trpc.user.writingGetDetail.queryOptions({ writingId })
-  );
-
-  // Fetch student submission history for this assignment
-  const { data: historyData, refetch: refetchHistory } = useQuery(
-    trpc.user.writingSubmissionsHistory.queryOptions({ writingId })
-  );
-
-  useEffect(() => {
-    setEssay("");
-    setActiveSubmission(null);
-  }, [writingId]);
-
-  // Calculate live word count
-  const wordCount = essay.trim().split(/\s+/).filter(Boolean).length;
-  const wordLimit = assignment?.wordLimit ?? 250;
-  const isOverLimit = wordLimit > 0 && wordCount > wordLimit * 1.5;
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!essay.trim()) return;
-
-    try {
-      const result = await submitWriting.mutateAsync({
-        writingId,
-        essay: essay.trim(),
-      });
-      setActiveSubmission(result);
-      refetchHistory();
-      if (onComplete) {
-        onComplete();
-      }
-    } catch {
-      // Handled by react-query error toast
-    }
-  };
+  const {
+    essay,
+    setEssay,
+    activeSubmission,
+    setActiveSubmission,
+    assignment,
+    isAssignmentLoading,
+    historyData,
+    wordCount,
+    wordLimit,
+    isOverLimit,
+    handleSubmit,
+    isSubmitting,
+  } = useWritingWorkspace({ writingId, courseId, onComplete });
 
   if (isAssignmentLoading) {
     return (
@@ -85,63 +54,6 @@ export function WritingWorkspace({ writingId, courseId, onComplete }: WritingWor
       </div>
     );
   }
-
-  // Helper to render high-fidelity Interactive Diff View
-  const renderInteractiveDiff = (text: string, corrections: any[]) => {
-    if (!corrections || corrections.length === 0) {
-      return <p className="text-xs leading-relaxed whitespace-pre-wrap">{text}</p>;
-    }
-
-    // Sort corrections by startChar to process from left to right
-    const sorted = [...corrections].sort((a, b) => a.startChar - b.startChar);
-
-    const elements = [];
-    let lastIdx = 0;
-
-    sorted.forEach((corr, idx) => {
-      // Text before the typo
-      if (corr.startChar > lastIdx) {
-        elements.push(
-          <span key={`text-${idx}`} className="text-xs leading-relaxed whitespace-pre-wrap text-foreground">
-            {text.slice(lastIdx, corr.startChar)}
-          </span>
-        );
-      }
-      // Strikethrough for typo, hoverable green for correction
-      elements.push(
-        <span
-          key={`corr-${idx}`}
-          className="inline-flex flex-wrap items-center gap-1 mx-1 px-1 rounded bg-muted border border-border"
-        >
-          <span className="line-through text-red-500 font-mono text-[10px] bg-red-500/10 px-1 rounded shrink-0">
-            {corr.original}
-          </span>
-          <span className="text-[10px] font-bold text-emerald-500 shrink-0">→</span>
-          <span
-            className="text-xs font-semibold text-emerald-500 bg-emerald-500/10 px-1 rounded cursor-help border-b border-dashed border-emerald-500 shrink-0"
-            title={corr.explanation}
-          >
-            {corr.corrected}
-          </span>
-        </span>
-      );
-      lastIdx = corr.endChar;
-    });
-
-    if (lastIdx < text.length) {
-      elements.push(
-        <span key="text-end" className="text-xs leading-relaxed whitespace-pre-wrap text-foreground">
-          {text.slice(lastIdx)}
-        </span>
-      );
-    }
-
-    return (
-      <div className="p-4 bg-card border rounded-lg leading-loose shadow-inner overflow-hidden max-h-[300px] overflow-y-auto">
-        {elements}
-      </div>
-    );
-  };
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-5 gap-6 text-slate-800 dark:text-slate-100">
@@ -246,7 +158,7 @@ export function WritingWorkspace({ writingId, courseId, onComplete }: WritingWor
                     onChange={(e) => setEssay(e.target.value)}
                     placeholder="Bắt đầu viết bài luận của bạn tại đây bằng tiếng Anh..."
                     className="min-h-[280px] text-xs leading-relaxed focus-visible:ring-amber-500/50 resize-y"
-                    disabled={submitWriting.isPending}
+                    disabled={isSubmitting}
                   />
                 </div>
 
@@ -280,10 +192,10 @@ export function WritingWorkspace({ writingId, courseId, onComplete }: WritingWor
                 <div className="flex justify-end pt-2 border-t border-border">
                   <Button
                     type="submit"
-                    disabled={submitWriting.isPending || essay.trim().length === 0 || isOverLimit}
+                    disabled={isSubmitting || essay.trim().length === 0 || isOverLimit}
                     className="bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs px-6"
                   >
-                    {submitWriting.isPending ? "ĐANG GỬI CHẤM AI..." : "NỘP BÀI LUẬN & CHẤM ĐIỂM AI"}
+                    {isSubmitting ? "ĐANG GỬI CHẤM AI..." : "NỘP BÀI LUẬN & CHẤM ĐIỂM AI"}
                   </Button>
                 </div>
               </form>
@@ -338,10 +250,10 @@ export function WritingWorkspace({ writingId, courseId, onComplete }: WritingWor
                       Rà soát lỗi chính tả & ngữ pháp trực quan
                     </span>
                   </div>
-                  {renderInteractiveDiff(
-                    activeSubmission.essay,
-                    activeSubmission.feedback?.corrections ?? []
-                  )}
+                  <GrammarDiffViewer
+                    text={activeSubmission.essay}
+                    corrections={activeSubmission.feedback?.corrections ?? []}
+                  />
                   {(!activeSubmission.feedback?.corrections || activeSubmission.feedback.corrections.length === 0) && (
                     <p className="text-[10px] text-emerald-600 font-bold bg-emerald-500/10 p-2 rounded border border-emerald-500/20 text-center">
                       Xuất sắc! AI không phát hiện lỗi chính tả hoặc ngữ pháp cơ bản nào trong bài viết.

@@ -1,6 +1,5 @@
 "use client";
 
-import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -14,7 +13,7 @@ const links = [
 export default function Header() {
   const pathname = usePathname();
   const pathParts = pathname?.split("/").filter(Boolean) || [];
-  const isProfileRoute = pathParts.length === 1 && !["dashboard", "admin", "login"].includes(pathParts[0]);
+  const isProfileRoute = pathParts.length === 1 && !["dashboard", "admin", "login"].includes(pathParts[0] ?? "");
 
   const shouldHideHeader =
     pathname === "/" ||

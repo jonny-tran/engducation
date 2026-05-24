@@ -29,11 +29,9 @@ import { Avatar, AvatarFallback } from "@engducation/ui/components/avatar";
 import {
   ShieldCheck,
   LayoutDashboard,
-  Users,
   BookOpen,
   Settings,
   Database,
-  Terminal,
   LogOut,
   ChevronUp,
   Circle

@@ -1,6 +1,5 @@
-"use client";
 import { StudentHeader } from "@/components/layout/student-header";
-import { StudentNotebookView } from "@/features/learning-content";
+import { StudentNotebookView } from "@/features/vocabulary";
 
 export default function MyNotebookPage() {
   return (

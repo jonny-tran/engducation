@@ -11,7 +11,6 @@ import {
   Award,
   Sparkles,
   Zap,
-  Check,
   Compass,
   ShieldCheck,
   Globe

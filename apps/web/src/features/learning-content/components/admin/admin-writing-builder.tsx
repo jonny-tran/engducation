@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { useWritingMutations } from "../hooks/use-writing-mutations";
+import { useWritingMutations } from "../../hooks/use-writing-mutations";
 import { Button } from "@engducation/ui/components/button";
 import { Input } from "@engducation/ui/components/input";
 import { Textarea } from "@engducation/ui/components/textarea";
@@ -53,7 +53,6 @@ export function AdminWritingBuilder({
       setSuggestedAnswer(writingAssignment.suggestedAnswer ?? "");
       setStatus(writingAssignment.status as any);
     } else {
-      // Default template values for premium appearance and ease of use
       setTitle("");
       setPrompt("");
       setRubric(

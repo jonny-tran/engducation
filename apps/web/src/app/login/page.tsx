@@ -1,16 +1,20 @@
-"use client";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { auth } from "@engducation/auth";
+import AuthView from "@/features/auth/components/auth-view";
 
-import { useState } from "react";
+export default async function LoginPage() {
+  const session = await auth.api.getSession({
+    headers: await headers(),
+  });
 
-import SignInForm from "@/components/auth/sign-in-form";
-import SignUpForm from "@/components/auth/sign-up-form";
+  if (session?.user) {
+    if (session.user.role === "admin") {
+      redirect(`/admin/${session.user.id}/dashboard`);
+    } else {
+      redirect(`/${session.user.id}`);
+    }
+  }
 
-export default function LoginPage() {
-  const [showSignIn, setShowSignIn] = useState(false);
-
-  return showSignIn ? (
-    <SignInForm onSwitchToSignUp={() => setShowSignIn(false)} />
-  ) : (
-    <SignUpForm onSwitchToSignIn={() => setShowSignIn(true)} />
-  );
+  return <AuthView />;
 }

@@ -1,3 +1,30 @@
 {
-  "extends": "@engducation/config/tsconfig.base.json"
+  "extends": "@engducation/config/tsconfig.base.json",
+  "compilerOptions": {
+    "lib": [
+      "ESNext",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "jsx": "react-jsx",
+    "paths": {
+      "@/*": [
+        "./apps/web/src/*"
+      ]
+    },
+    "types": [
+      "node"
+    ]
+  },
+  "include": [
+    "apps/**/*",
+    "packages/**/*",
+    "pnpm-workspace.yaml"
+  ],
+  "exclude": [
+    "node_modules",
+    "**/node_modules",
+    "**/dist",
+    "**/.next"
+  ]
 }

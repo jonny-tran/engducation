@@ -1,5 +1,5 @@
 "use client";
-import { useDashboardStats } from "../hooks/use-dashboard-stats";
+import { useDashboardStats } from "../../hooks/use-dashboard-stats";
 import { Card, CardContent } from "@engducation/ui/components/card";
 import { Skeleton } from "@engducation/ui/components/skeleton";
 import { BookOpen, FileText, ListChecks, TrendingUp } from "lucide-react";
@@ -50,7 +50,7 @@ function StatCard({ label, value, icon, accentColor, description }: StatCardProp
 }
 
 export function AdminStatsCards() {
-  const { data: stats, isLoading } = useDashboardStats();
+  const { data: stats } = useDashboardStats();
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

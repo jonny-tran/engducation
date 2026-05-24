@@ -70,8 +70,11 @@ export function StudentDashboardView({
         }
       }
 
-      setOpenModuleIds([courseDetail.modules[0].id]);
-      const firstContent = courseDetail.modules[0].contents?.[0];
+      const firstModule = courseDetail.modules[0];
+      if (!firstModule) return;
+
+      setOpenModuleIds([firstModule.id]);
+      const firstContent = firstModule.contents?.[0];
       if (firstContent) {
         setActiveContentId(firstContent.id);
         setActiveContentType(firstContent.type);

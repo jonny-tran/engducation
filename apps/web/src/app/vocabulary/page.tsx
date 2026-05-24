@@ -1,6 +1,5 @@
-"use client";
 import { StudentHeader } from "@/components/layout/student-header";
-import { StudentVocabularyView } from "@/features/learning-content";
+import { StudentVocabularyView } from "@/features/vocabulary";
 
 export default function VocabularyPage() {
   return (

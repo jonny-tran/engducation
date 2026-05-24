@@ -4,10 +4,8 @@ import { auth } from "@engducation/auth";
 import {
   Breadcrumb,
   BreadcrumbItem,
-  BreadcrumbLink,
   BreadcrumbList,
   BreadcrumbPage,
-  BreadcrumbSeparator,
 } from "@engducation/ui/components/breadcrumb";
 import { Separator } from "@engducation/ui/components/separator";
 import { SidebarTrigger } from "@engducation/ui/components/sidebar";

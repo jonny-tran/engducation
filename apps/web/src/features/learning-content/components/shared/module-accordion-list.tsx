@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useModuleMutations } from "../hooks/use-module-mutations";
-import { useLessonMutations } from "../hooks/use-lesson-mutations";
+import { useModuleMutations } from "../../hooks/use-module-mutations";
+import { useLessonMutations } from "../../hooks/use-lesson-mutations";
 import { Button } from "@engducation/ui/components/button";
 import { Input } from "@engducation/ui/components/input";
 import { Card, CardHeader, CardTitle, CardContent } from "@engducation/ui/components/card";

@@ -8,12 +8,10 @@ import { VocabularyCard } from "./vocabulary-card";
 import { Button } from "@engducation/ui/components/button";
 import { Input } from "@engducation/ui/components/input";
 import { Skeleton } from "@engducation/ui/components/skeleton";
-import { Search, Filter, X, ChevronLeft, ChevronRight, BookOpen, Bookmark } from "lucide-react";
+import { Search, X, ChevronLeft, ChevronRight, BookOpen, Bookmark } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
 
-const CEFR_LEVELS = ["A1", "A2", "B1", "B2", "C1", "C2"] as const;
-type CefrLevel = typeof CEFR_LEVELS[number];
 const PAGE_SIZE = 8; // Beautiful grid layout
 
 export function StudentNotebookView() {
@@ -78,7 +76,7 @@ export function StudentNotebookView() {
 
         return { previousData, queryKey, removedItem };
       },
-      onError: (err: any, variables: any, context: any) => {
+      onError: (_err: any, _variables: any, context: any) => {
         // Rollback on failure
         if (context?.previousData && context?.queryKey) {
           queryClient.setQueryData(context.queryKey, context.previousData);

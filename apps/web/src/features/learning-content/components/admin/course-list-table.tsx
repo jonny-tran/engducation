@@ -1,10 +1,9 @@
 "use client";
-
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { trpc } from "@/utils/trpc";
-import { useCourseMutations } from "../hooks/use-course-mutations";
+import { useCourseMutations } from "../../hooks/use-course-mutations";
 import { AdminCourseForm } from "./admin-course-form";
 import { Button } from "@engducation/ui/components/button";
 import { Input } from "@engducation/ui/components/input";
@@ -44,7 +43,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@engducation/ui/components/alert-dialog";
-import { Search, Filter, X, Plus, Edit2, Trash2, Globe, Lock, MoreVertical, BookOpen, Layers } from "lucide-react";
+import { Search, X, Plus, Edit2, Trash2, Globe, Lock, MoreVertical, BookOpen, Layers } from "lucide-react";
 
 interface CourseListTableProps {
   adminId: string;
@@ -130,7 +129,7 @@ export function CourseListTable({ adminId }: CourseListTableProps) {
             Quản Lý Khóa Học
           </h1>
           <p className="text-xs text-muted-foreground mt-1">
-            Xây dựng, cấu trúc, xuất bản và giám sát hành trình giảng dạy của bạn.
+            Xây dựng, cấu trúc, xuất bản và giảng dạy của bạn.
           </p>
         </div>
         <Button
@@ -253,7 +252,6 @@ export function CourseListTable({ adminId }: CourseListTableProps) {
                         >
                           <div className="relative h-12 w-20 rounded-xl overflow-hidden border border-border/80 bg-muted/40 shadow-xs shrink-0 group-hover:border-rose-500/30 transition-colors">
                             {course.thumbnailUrl ? (
-                              // eslint-disable-next-line @next/next/no-img-element
                               <img
                                 src={course.thumbnailUrl}
                                 alt={course.title}
