@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { eq, and, asc, sql, like, or, inArray } from "drizzle-orm";
+import { eq, and, asc, sql, like, or, inArray, isNull, isNotNull } from "drizzle-orm";
 import { z } from "zod";
 import crypto from "node:crypto";
 
@@ -159,14 +159,20 @@ export const adminContentRouter = router({
           level: courseLevelSchema.optional(),
           status: contentStatusSchema.optional(),
           search: z.string().optional(),
+          showDeleted: z.boolean().optional().default(false),
         })
         .optional(),
     )
     .query(async ({ ctx, input }) => {
-      const { page = 1, pageSize = 20, level, status, search } = input ?? {};
+      const { page = 1, pageSize = 20, level, status, search, showDeleted = false } = input ?? {};
       const offset = (page - 1) * pageSize;
 
       const whereParts = [];
+      if (showDeleted) {
+        whereParts.push(isNotNull(courses.deletedAt));
+      } else {
+        whereParts.push(isNull(courses.deletedAt));
+      }
       if (level) whereParts.push(eq(courses.level, level));
       if (status) whereParts.push(eq(courses.status, status));
       if (search) {
@@ -250,12 +256,12 @@ export const adminContentRouter = router({
     .mutation(async ({ ctx, input }) => {
       const { id, ...rest } = input;
       const existing = await ctx.db.query.courses.findFirst({
-        where: eq(courses.id, id),
+        where: and(eq(courses.id, id), isNull(courses.deletedAt)),
       });
       if (!existing) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "Khóa học không tồn tại",
+          message: "Khóa học không tồn tại hoặc đã bị xóa mềm",
         });
       }
 
@@ -275,12 +281,12 @@ export const adminContentRouter = router({
     .mutation(async ({ ctx, input }) => {
       const { courseId } = input;
       const existing = await ctx.db.query.courses.findFirst({
-        where: eq(courses.id, courseId),
+        where: and(eq(courses.id, courseId), isNull(courses.deletedAt)),
       });
       if (!existing) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "Khóa học không tồn tại",
+          message: "Khóa học không tồn tại hoặc đã bị xóa mềm",
         });
       }
 
@@ -337,18 +343,49 @@ export const adminContentRouter = router({
   courseDelete: adminProcedure
     .input(z.object({ id: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
-      const activeModules = await ctx.db.query.modules.findMany({
-        where: eq(modules.courseId, input.id),
+      const existing = await ctx.db.query.courses.findFirst({
+        where: and(eq(courses.id, input.id), isNull(courses.deletedAt)),
       });
-      if (activeModules.length > 0) {
+      if (!existing) {
         throw new TRPCError({
-          code: "PRECONDITION_FAILED",
-          message: `Không thể xóa khóa học đang có ${activeModules.length} tuần/module học. Hãy xóa toàn bộ module trước.`,
+          code: "NOT_FOUND",
+          message: "Khóa học không tồn tại hoặc đã bị xóa",
         });
       }
 
-      await ctx.db.delete(courses).where(eq(courses.id, input.id));
+      await ctx.db
+        .update(courses)
+        .set({
+          deletedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(courses.id, input.id));
+
       return { deleted: true };
+    }),
+
+  courseRestore: adminProcedure
+    .input(z.object({ id: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      const existing = await ctx.db.query.courses.findFirst({
+        where: and(eq(courses.id, input.id), isNotNull(courses.deletedAt)),
+      });
+      if (!existing) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Khóa học không tồn tại trong Thùng rác",
+        });
+      }
+
+      await ctx.db
+        .update(courses)
+        .set({
+          deletedAt: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(courses.id, input.id));
+
+      return { restored: true };
     }),
 
   // ─── MODULES ──────────────────────────────────────────────
@@ -921,7 +958,7 @@ export const adminContentRouter = router({
     .query(async ({ ctx, input }) => {
       const { courseId } = input;
       const course = await ctx.db.query.courses.findFirst({
-        where: eq(courses.id, courseId),
+        where: and(eq(courses.id, courseId), isNull(courses.deletedAt)),
         with: {
           modules: {
             orderBy: [asc(modules.order)],

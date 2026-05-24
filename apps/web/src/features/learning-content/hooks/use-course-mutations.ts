@@ -77,10 +77,28 @@ export function useCourseMutations() {
     })
   );
 
+  const restoreCourse = useMutation(
+    trpc.admin.courseRestore.mutationOptions({
+      onSuccess: () => {
+        toast.success("Khôi phục khóa học thành công");
+        queryClient.invalidateQueries({
+          queryKey: trpc.admin.courseList.queryKey(),
+        });
+        queryClient.invalidateQueries({
+          queryKey: trpc.admin.dashboardStats.queryKey(),
+        });
+      },
+      onError: (err) => {
+        toast.error(err.message);
+      },
+    })
+  );
+
   return {
     createCourse,
     updateCourse,
     deleteCourse,
     publishCourse,
+    restoreCourse,
   };
 }

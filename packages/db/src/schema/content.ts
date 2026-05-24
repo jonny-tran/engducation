@@ -53,6 +53,7 @@ export const courses = pgTable("courses", {
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .defaultNow()
     .notNull(),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
 });
 
 export const modules = pgTable(

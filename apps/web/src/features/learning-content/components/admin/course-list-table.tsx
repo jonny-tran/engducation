@@ -43,6 +43,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@engducation/ui/components/alert-dialog";
+import { Tabs, TabsList, TabsTrigger } from "@engducation/ui/components/tabs";
 import { Search, X, Plus, Edit2, Trash2, Globe, Lock, MoreVertical, BookOpen, Layers } from "lucide-react";
 
 interface CourseListTableProps {
@@ -59,13 +60,14 @@ export function CourseListTable({ adminId }: CourseListTableProps) {
   const [selectedLevel, setSelectedLevel] = useState<string>("");
   const [selectedStatus, setSelectedStatus] = useState<string>("");
   const [page, setPage] = useState(1);
+  const [showDeleted, setShowDeleted] = useState(false);
 
   // Modal triggers
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingCourse, setEditingCourse] = useState<any | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
 
-  const { deleteCourse, publishCourse } = useCourseMutations();
+  const { deleteCourse, publishCourse, restoreCourse } = useCourseMutations();
 
   // Search debounce
   useEffect(() => {
@@ -84,6 +86,7 @@ export function CourseListTable({ adminId }: CourseListTableProps) {
       search: debouncedSearch || undefined,
       level: (selectedLevel || undefined) as any,
       status: (selectedStatus || undefined) as any,
+      showDeleted,
     })
   );
 
@@ -138,6 +141,34 @@ export function CourseListTable({ adminId }: CourseListTableProps) {
         >
           <Plus className="h-4 w-4 mr-1.5" /> Tạo khóa học mới
         </Button>
+      </div>
+
+      {/* Elegant Premium Tabs for switching between Active and Deleted courses */}
+      <div className="w-full border-b border-border/40 pb-1">
+        <Tabs
+          value={showDeleted ? "deleted" : "active"}
+          onValueChange={(val) => {
+            setShowDeleted(val === "deleted");
+            setPage(1);
+          }}
+          className="w-full"
+        >
+          <TabsList className="bg-muted/40 p-1 rounded-xl gap-1 w-fit flex">
+            <TabsTrigger
+              value="active"
+              className="rounded-lg text-xs font-bold px-4 py-1.5 transition-all data-[state=active]:bg-rose-600 data-[state=active]:text-white"
+            >
+              Khóa học hiện tại
+            </TabsTrigger>
+            <TabsTrigger
+              value="deleted"
+              className="rounded-lg text-xs font-bold px-4 py-1.5 transition-all data-[state=active]:bg-rose-600 data-[state=active]:text-white flex items-center gap-1.5"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Thùng rác
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
       </div>
 
       {/* Glassmorphic Filter & Search Bar */}
@@ -242,13 +273,21 @@ export function CourseListTable({ adminId }: CourseListTableProps) {
                     <TableRow
                       key={course.id}
                       className="hover:bg-muted/10 transition-colors border-b border-border/50 group cursor-pointer"
-                      onClick={() => router.push(`/admin/${adminId}/courses/${course.id}`)}
+                      onClick={() => {
+                        if (!showDeleted) {
+                          router.push(`/admin/${adminId}/courses/${course.id}`);
+                        }
+                      }}
                     >
                       {/* Name & Thumbnail */}
                       <TableCell className="p-4" onClick={(e) => e.stopPropagation()}>
                         <div
                           className="flex items-center gap-3.5"
-                          onClick={() => router.push(`/admin/${adminId}/courses/${course.id}`)}
+                          onClick={() => {
+                            if (!showDeleted) {
+                              router.push(`/admin/${adminId}/courses/${course.id}`);
+                            }
+                          }}
                         >
                           <div className="relative h-12 w-20 rounded-xl overflow-hidden border border-border/80 bg-muted/40 shadow-xs shrink-0 group-hover:border-rose-500/30 transition-colors">
                             {course.thumbnailUrl ? (
@@ -338,72 +377,86 @@ export function CourseListTable({ adminId }: CourseListTableProps) {
 
                       {/* Actions */}
                       <TableCell className="p-4 text-center" onClick={(e) => e.stopPropagation()}>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger
-                            render={
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-8 w-8 p-0 hover:bg-muted/80 rounded-xl"
-                              />
-                            }
-                          >
-                            <MoreVertical className="h-4 w-4 text-muted-foreground" />
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="bg-card border border-border/80 shadow-xl rounded-xl p-1 w-44">
-                            <DropdownMenuGroup>
-                              <DropdownMenuLabel className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground px-2 py-1.5">
-                                Tùy chọn quản lý
-                              </DropdownMenuLabel>
-                            </DropdownMenuGroup>
-                            <DropdownMenuItem
-                              className="gap-2 cursor-pointer"
-                              onClick={() => router.push(`/admin/${adminId}/courses/${course.id}`)}
+                        {showDeleted ? (
+                          <div className="flex items-center justify-center">
+                            <Button
+                              onClick={async () => {
+                                await restoreCourse.mutateAsync({ id: course.id });
+                              }}
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl h-8 px-3 transition-all hover:scale-[1.02]"
+                              disabled={restoreCourse.isPending}
                             >
-                              <BookOpen className="h-3.5 w-3.5 text-rose-500" />
-                              <span>Đề cương & Cấu trúc</span>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              className="gap-2 cursor-pointer"
-                              onClick={() => handleEditCourse(course)}
-                            >
-                              <Edit2 className="h-3.5 w-3.5 text-blue-500" />
-                              <span>Sửa thông tin</span>
-                            </DropdownMenuItem>
-                            {course.status !== "published" ? (
-                              <DropdownMenuItem
-                                className="gap-2 cursor-pointer text-emerald-600 dark:text-emerald-400"
-                                onClick={async () => {
-                                  await publishCourse.mutateAsync({ courseId: course.id });
-                                }}
-                                disabled={publishCourse.isPending}
-                              >
-                                <Globe className="h-3.5 w-3.5 text-emerald-500" />
-                                <span>Xuất bản khóa học</span>
-                              </DropdownMenuItem>
-                            ) : (
-                              <DropdownMenuItem className="gap-2 opacity-50" disabled>
-                                <Lock className="h-3.5 w-3.5 text-muted-foreground" />
-                                <span>Đã xuất bản</span>
-                              </DropdownMenuItem>
-                            )}
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              variant="destructive"
-                              className="gap-2 cursor-pointer"
-                              onClick={() =>
-                                setDeleteTarget({
-                                  id: course.id,
-                                  title: course.title,
-                                  lessonCount: course.lessonCount,
-                                })
+                              {restoreCourse.isPending ? "Khôi phục..." : "Khôi phục"}
+                            </Button>
+                          </div>
+                        ) : (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger
+                              render={
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 w-8 p-0 hover:bg-muted/80 rounded-xl"
+                                />
                               }
                             >
-                              <Trash2 className="h-3.5 w-3.5" />
-                              <span>Xóa khóa học</span>
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                              <MoreVertical className="h-4 w-4 text-muted-foreground" />
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="bg-card border border-border/80 shadow-xl rounded-xl p-1 w-44">
+                              <DropdownMenuGroup>
+                                <DropdownMenuLabel className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground px-2 py-1.5">
+                                  Tùy chọn quản lý
+                                </DropdownMenuLabel>
+                              </DropdownMenuGroup>
+                              <DropdownMenuItem
+                                className="gap-2 cursor-pointer"
+                                onClick={() => router.push(`/admin/${adminId}/courses/${course.id}`)}
+                              >
+                                <BookOpen className="h-3.5 w-3.5 text-rose-500" />
+                                <span>Đề cương & Cấu trúc</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="gap-2 cursor-pointer"
+                                onClick={() => handleEditCourse(course)}
+                              >
+                                <Edit2 className="h-3.5 w-3.5 text-blue-500" />
+                                <span>Sửa thông tin</span>
+                              </DropdownMenuItem>
+                              {course.status !== "published" ? (
+                                <DropdownMenuItem
+                                  className="gap-2 cursor-pointer text-emerald-600 dark:text-emerald-400"
+                                  onClick={async () => {
+                                    await publishCourse.mutateAsync({ courseId: course.id });
+                                  }}
+                                  disabled={publishCourse.isPending}
+                                >
+                                  <Globe className="h-3.5 w-3.5 text-emerald-500" />
+                                  <span>Xuất bản khóa học</span>
+                                </DropdownMenuItem>
+                              ) : (
+                                <DropdownMenuItem className="gap-2 opacity-50" disabled>
+                                  <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+                                  <span>Đã xuất bản</span>
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                variant="destructive"
+                                className="gap-2 cursor-pointer"
+                                onClick={() =>
+                                  setDeleteTarget({
+                                    id: course.id,
+                                    title: course.title,
+                                    lessonCount: course.lessonCount,
+                                  })
+                                }
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                                <span>Xóa khóa học</span>
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
                       </TableCell>
                     </TableRow>
                   );
@@ -472,16 +525,9 @@ export function CourseListTable({ adminId }: CourseListTableProps) {
           <AlertDialogHeader>
             <AlertDialogTitle className="text-sm font-bold uppercase">Xác nhận xóa khóa học</AlertDialogTitle>
             <AlertDialogDescription className="text-xs leading-relaxed text-muted-foreground mt-2">
-              {deleteTarget && deleteTarget.lessonCount > 0 ? (
-                <>
-                  Khóa học <strong className="text-foreground">&ldquo;{deleteTarget.title}&rdquo;</strong> đang có{" "}
-                  <strong className="text-foreground">{deleteTarget.lessonCount} bài học</strong>. Bạn buộc phải vào quản lý chi tiết và xóa toàn bộ các Học phần (Modules) trước khi xóa khóa học này.
-                </>
-              ) : (
-                <>
-                  Bạn có chắc chắn muốn xóa khóa học <strong className="text-foreground">&ldquo;{deleteTarget?.title}&rdquo;</strong>? Toàn bộ các học liệu liên quan sẽ bị loại bỏ khỏi hệ thống. Hành động này không thể hoàn tác.
-                </>
-              )}
+              Bạn có chắc chắn muốn di chuyển khóa học <strong className="text-foreground">&ldquo;{deleteTarget?.title}&rdquo;</strong> vào Thùng rác?
+              <br />
+              Học viên sẽ không thể truy cập khóa học này và các bài giảng đi kèm. Bạn có thể khôi phục lại bất kỳ lúc nào từ Thùng rác.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="mt-4 gap-2">
@@ -489,13 +535,9 @@ export function CourseListTable({ adminId }: CourseListTableProps) {
             <AlertDialogAction
               className="rounded-xl h-9 text-xs font-bold bg-destructive hover:bg-destructive"
               onClick={handleDeleteConfirm}
-              disabled={deleteCourse.isPending || (deleteTarget?.lessonCount ?? 0) > 0}
+              disabled={deleteCourse.isPending}
             >
-              {deleteCourse.isPending
-                ? "Đang xóa..."
-                : (deleteTarget?.lessonCount ?? 0) > 0
-                  ? "Chứa bài giảng"
-                  : "Xóa vĩnh viễn"}
+              {deleteCourse.isPending ? "Đang xóa..." : "Xóa khóa học"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

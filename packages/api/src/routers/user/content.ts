@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { eq, and, asc, sql, type SQL } from "drizzle-orm";
+import { eq, and, asc, sql, type SQL, isNull } from "drizzle-orm";
 import { z } from "zod";
 import crypto from "node:crypto";
 
@@ -46,7 +46,10 @@ export const userContentRouter = router({
       const { page = 1, pageSize = 12, level } = input ?? {};
       const offset = (page - 1) * pageSize;
 
-      const filters: SQL[] = [eq(courses.status, "published")];
+      const filters: SQL[] = [
+        eq(courses.status, "published"),
+        isNull(courses.deletedAt),
+      ];
       if (level) filters.push(eq(courses.level, level));
 
       const whereClause =
@@ -145,7 +148,7 @@ export const userContentRouter = router({
       const { courseId } = input;
 
       const course = await ctx.db.query.courses.findFirst({
-        where: eq(courses.id, courseId),
+        where: and(eq(courses.id, courseId), isNull(courses.deletedAt)),
         with: {
           modules: {
             orderBy: [asc(modules.order)],
@@ -242,7 +245,7 @@ export const userContentRouter = router({
       const { courseId } = input;
 
       const course = await ctx.db.query.courses.findFirst({
-        where: eq(courses.id, courseId),
+        where: and(eq(courses.id, courseId), isNull(courses.deletedAt)),
       });
 
       if (!course) {
