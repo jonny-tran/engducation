@@ -2,66 +2,74 @@ import { TRPCError } from "@trpc/server";
 import { eq, and, desc, sql, inArray, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
-import { router, publicProcedure, protectedProcedure } from "../../index";
-import { vocabularies, userBookmarks } from "@engducation/db/schema";
+import { router, protectedProcedure } from "../../index";
+import { vocabularies, userSavedVocabularies, userEnrollments } from "@engducation/db/schema";
 
 // ==========================================
 // ZOD SCHEMAS
 // ==========================================
 
-const courseLevelSchema = z.enum(["A1", "A2", "B1", "B2", "C1", "C2"]);
-
 const listVocabularySchema = z.object({
+  courseId: z.string().min(1, "Khóa học không được để trống"),
+  moduleId: z.string().optional(),
   search: z.string().optional(),
-  level: courseLevelSchema.optional(),
-  topic: z.string().optional(),
   page: z.number().int().min(1).default(1),
   pageSize: z.number().int().min(1).max(100).default(20),
 });
 
-// ==========================================
-// HELPERS
-// ==========================================
-
-function buildFilters(input: z.input<typeof listVocabularySchema>): SQL<unknown>[] {
-  const parts: SQL<unknown>[] = [];
-  if (input.search) {
-    parts.push(sql`${vocabularies.word} ILIKE ${`%${input.search.toLowerCase()}%`}`);
-  }
-  if (input.level) parts.push(eq(vocabularies.level, input.level));
-  if (input.topic) parts.push(eq(vocabularies.topic, input.topic));
-  return parts;
-}
-
-// Drizzle's `and()` trả về tuple type gây lỗi spread inference khi dùng trong
-// `.where()` của joined query. Helper này gom N filter thành 1 SQL expression
-// bằng cách gọi `and()` với tối đa 4 tham số trực tiếp (không spread).
-function buildWhereClause(f: SQL<unknown>[]): SQL<unknown> | undefined {
-  if (f.length === 0) return undefined;
-  if (f.length === 1) return f[0]!;
-  if (f.length === 2) return and(f[0]!, f[1]!);
-  if (f.length === 3) return and(f[0]!, f[1]!, f[2]!);
-  return and(f[0]!, f[1]!, f[2]!, f[3]!);
-}
+const notebookSchema = z.object({
+  search: z.string().optional(),
+  page: z.number().int().min(1).default(1),
+  pageSize: z.number().int().min(1).max(100).default(20),
+});
 
 // ==========================================
 // ROUTER
 // ==========================================
 
 export const userVocabularyRouter = router({
-  // ─── LIST (Public + Authenticated) ────────────────────────
+  // ─── LIST (Flashcards of a Course/Module) ──────────────────
 
-  list: publicProcedure
-    .input(listVocabularySchema.optional())
+  list: protectedProcedure
+    .input(listVocabularySchema)
     .query(async ({ ctx, input }) => {
-      const { page = 1, pageSize = 20, search, level, topic } = input ?? {};
+      const userId = ctx.session.user.id;
+      const { courseId, moduleId, page = 1, pageSize = 20, search } = input;
       const offset = (page - 1) * pageSize;
 
-      const extras = buildFilters({ search, level, topic, page, pageSize });
-      const whereClause = buildWhereClause(extras);
+      // 1. Kiểm tra đăng ký khóa học
+      const enrollment = await ctx.db.query.userEnrollments.findFirst({
+        where: and(
+          eq(userEnrollments.userId, userId),
+          eq(userEnrollments.courseId, courseId)
+        ),
+      });
 
-      // Truy vấn song song: danh sách + đếm tổng
-      const [items, countResult] = await Promise.all([
+      if (!enrollment) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Bạn phải đăng ký khóa học này để truy cập từ vựng.",
+        });
+      }
+
+      // 2. Build filters
+      const filters: SQL[] = [
+        eq(vocabularies.courseId, courseId),
+        eq(vocabularies.status, "published"),
+      ];
+      if (moduleId) {
+        filters.push(eq(vocabularies.moduleId, moduleId));
+      }
+      if (search) {
+        filters.push(
+          sql`${vocabularies.word} ILIKE ${`%${search.toLowerCase()}%`}`
+        );
+      }
+
+      const whereClause = filters.length > 1 ? and(...filters) : filters[0];
+
+      // 3. Query vocabularies & count
+      const [items, countResult, savedVocabs] = await Promise.all([
         ctx.db.query.vocabularies.findMany({
           where: whereClause,
           orderBy: [desc(vocabularies.createdAt)],
@@ -73,36 +81,26 @@ export const userVocabularyRouter = router({
           .from(vocabularies)
           .where(whereClause)
           .limit(1),
+        ctx.db
+          .select({ vocabularyId: userSavedVocabularies.vocabularyId, isMastered: userSavedVocabularies.isMastered })
+          .from(userSavedVocabularies)
+          .where(eq(userSavedVocabularies.userId, userId)),
       ]);
 
       const total = Number(countResult[0]?.total ?? 0);
 
-      // Hydration: nếu chưa đăng nhập → isBookmarked = false
-      const enriched = items.map((item) => ({ ...item, isBookmarked: false }));
+      // 4. Map isSaved và isMastered
+      const savedVocabMap = new Map(savedVocabs.map((sv) => [sv.vocabularyId, sv.isMastered]));
 
-      // Nếu có session → đối chiếu với user_bookmarks trong 1 query duy nhất
-      if (ctx.session?.user) {
-        const userId = ctx.session.user.id;
-        const vocabIds = items.map((i) => i.id);
-
-        if (vocabIds.length > 0) {
-          const bookmarks = await ctx.db
-            .select({ vocabularyId: userBookmarks.vocabularyId })
-            .from(userBookmarks)
-            .where(
-              and(
-                eq(userBookmarks.userId, userId),
-                inArray(userBookmarks.vocabularyId, vocabIds),
-              ),
-            );
-
-          const bookmarkedIdsSet = new Set(bookmarks.map((b) => b.vocabularyId));
-
-          for (let i = 0; i < enriched.length; i++) {
-            enriched[i]!.isBookmarked = bookmarkedIdsSet.has(enriched[i]!.id);
-          }
-        }
-      }
+      const enriched = items.map((item) => {
+        const isSaved = savedVocabMap.has(item.id);
+        const isMastered = savedVocabMap.get(item.id) ?? false;
+        return {
+          ...item,
+          isSaved,
+          isMastered,
+        };
+      });
 
       return {
         items: enriched,
@@ -110,15 +108,14 @@ export const userVocabularyRouter = router({
       };
     }),
 
-  // ─── TOGGLE BOOKMARK ─────────────────────────────────────
+  // ─── TOGGLE SAVE TO NOTEBOOK ──────────────────────────────
 
-  toggleBookmark: protectedProcedure
+  toggleSave: protectedProcedure
     .input(z.object({ vocabularyId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
       const { vocabularyId } = input;
 
-      // Xác minh từ vựng tồn tại trong hệ thống
       const vocab = await ctx.db.query.vocabularies.findFirst({
         where: eq(vocabularies.id, vocabularyId),
       });
@@ -130,94 +127,135 @@ export const userVocabularyRouter = router({
         });
       }
 
-      // Kiểm tra bản ghi bookmark hiện tại
-      const existing = await ctx.db.query.userBookmarks.findFirst({
+      const existing = await ctx.db.query.userSavedVocabularies.findFirst({
         where: and(
-          eq(userBookmarks.userId, userId),
-          eq(userBookmarks.vocabularyId, vocabularyId),
+          eq(userSavedVocabularies.userId, userId),
+          eq(userSavedVocabularies.vocabularyId, vocabularyId)
         ),
       });
 
       if (existing) {
-        // Đã bookmark → xóa (hủy đánh dấu)
         await ctx.db
-          .delete(userBookmarks)
+          .delete(userSavedVocabularies)
           .where(
             and(
-              eq(userBookmarks.userId, userId),
-              eq(userBookmarks.vocabularyId, vocabularyId),
-            ),
+              eq(userSavedVocabularies.userId, userId),
+              eq(userSavedVocabularies.vocabularyId, vocabularyId)
+            )
           );
-        return { bookmarked: false };
+        return { saved: false };
       }
 
-      // Chưa bookmark → tạo mới (đánh dấu)
-      await ctx.db.insert(userBookmarks).values({ userId, vocabularyId });
+      await ctx.db.insert(userSavedVocabularies).values({
+        userId,
+        vocabularyId,
+        isMastered: false,
+      });
 
-      return { bookmarked: true };
+      return { saved: true };
     }),
 
   // ─── GET PERSONAL NOTEBOOK ────────────────────────────────
 
   getPersonalNotebook: protectedProcedure
-    .input(listVocabularySchema.optional())
+    .input(notebookSchema.optional())
     .query(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
-      const { page = 1, pageSize = 20, search, level, topic } = input ?? {};
-
+      const { page = 1, pageSize = 20, search } = input ?? {};
       const offset = (page - 1) * pageSize;
-      const extras = buildFilters({ search, level, topic, page, pageSize });
 
-      // Ghép userId + extras: tối đa 4 filter → buildWhereClause xử lý an toàn về type
-      const whereClause = buildWhereClause([eq(userBookmarks.userId, userId), ...extras]);
+      // 1. Query all saved vocabularies for this user to filter and paginate
+      const extras: SQL[] = [eq(userSavedVocabularies.userId, userId)];
+      
+      let joinWhere = and(...extras);
+      if (search) {
+        joinWhere = and(
+          eq(userSavedVocabularies.userId, userId),
+          sql`${vocabularies.word} ILIKE ${`%${search.toLowerCase()}%`}`
+        );
+      }
 
-      // Bước 1: Lấy toàn bộ bookmark IDs (sắp xếp theo bookmark mới nhất)
-      // Cast to `any` để bypass Drizzle's strict functional `.where()` overloads
-      // cho joined query (runtime hoạt động bình thường)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const allBookmarks = await (ctx.db
-        .select({ vocabularyId: userBookmarks.vocabularyId })
-        .from(userBookmarks)
-        .innerJoin(vocabularies, eq(userBookmarks.vocabularyId, vocabularies.id))
-        .where(whereClause as any) as any) as { vocabularyId: string }[];
+      // Query matched records
+      const allSaved = await ctx.db
+        .select({
+          vocabularyId: userSavedVocabularies.vocabularyId,
+          isMastered: userSavedVocabularies.isMastered,
+          createdAt: userSavedVocabularies.createdAt,
+        })
+        .from(userSavedVocabularies)
+        .innerJoin(vocabularies, eq(userSavedVocabularies.vocabularyId, vocabularies.id))
+        .where(joinWhere)
+        .orderBy(desc(userSavedVocabularies.createdAt));
 
-      const total = allBookmarks.length;
-      const paginatedIds = allBookmarks
-        .slice(offset, offset + pageSize)
-        .map((b) => b.vocabularyId);
+      const total = allSaved.length;
+      const paginatedSaved = allSaved.slice(offset, offset + pageSize);
+      const vocabIds = paginatedSaved.map((s) => s.vocabularyId);
 
-      // Bước 2: Lấy chi tiết vocabularies theo IDs đã phân trang
-      const items =
-        paginatedIds.length > 0
-          ? await ctx.db
-              .select({
-                id: vocabularies.id,
-                word: vocabularies.word,
-                ipa: vocabularies.ipa,
-                partOfSpeech: vocabularies.partOfSpeech,
-                meaningVi: vocabularies.meaningVi,
-                exampleEn: vocabularies.exampleEn,
-                exampleVi: vocabularies.exampleVi,
-                audioUrl: vocabularies.audioUrl,
-                level: vocabularies.level,
-                topic: vocabularies.topic,
-                createdAt: vocabularies.createdAt,
-                updatedAt: vocabularies.updatedAt,
-              })
-              .from(vocabularies)
-              .where(inArray(vocabularies.id, paginatedIds))
-          : [];
+      // 2. Query full details from vocabularies
+      const details = vocabIds.length > 0
+        ? await ctx.db
+            .select()
+            .from(vocabularies)
+            .where(inArray(vocabularies.id, vocabIds))
+        : [];
 
-      // Duy trì thứ tự bookmark gốc bằng Map
-      const orderMap = new Map(items.map((v) => [v.id, v]));
-      const ordered = paginatedIds
-        .map((id) => orderMap.get(id))
-        .filter((v): v is NonNullable<typeof v> => v !== undefined)
-        .map((v) => ({ ...v, isBookmarked: true }));
+      const detailsMap = new Map(details.map((d) => [d.id, d]));
+
+      const items = paginatedSaved
+        .map((s) => {
+          const detail = detailsMap.get(s.vocabularyId);
+          if (!detail) return null;
+          return {
+            ...detail,
+            isSaved: true,
+            isMastered: s.isMastered,
+          };
+        })
+        .filter((i): i is NonNullable<typeof i> => i !== null);
 
       return {
-        items: ordered,
+        items,
         pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
       };
+    }),
+
+  // ─── UPDATE NOTEBOOK STATUS (Quizlet-like Study) ──────────
+
+  updateNotebookStatus: protectedProcedure
+    .input(
+      z.object({
+        vocabularyId: z.string().min(1),
+        isMastered: z.boolean(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      const { vocabularyId, isMastered } = input;
+
+      const existing = await ctx.db.query.userSavedVocabularies.findFirst({
+        where: and(
+          eq(userSavedVocabularies.userId, userId),
+          eq(userSavedVocabularies.vocabularyId, vocabularyId)
+        ),
+      });
+
+      if (!existing) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Từ vựng chưa được lưu trong sổ tay cá nhân của bạn.",
+        });
+      }
+
+      await ctx.db
+        .update(userSavedVocabularies)
+        .set({ isMastered })
+        .where(
+          and(
+            eq(userSavedVocabularies.userId, userId),
+            eq(userSavedVocabularies.vocabularyId, vocabularyId)
+          )
+        );
+
+      return { success: true };
     }),
 });

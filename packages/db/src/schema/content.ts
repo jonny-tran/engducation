@@ -45,6 +45,8 @@ export const courses = pgTable("courses", {
   thumbnailUrl: text("thumbnail_url"),
   level: courseLevelEnum("level").notNull(),
   status: contentStatusEnum("status").default("draft").notNull(),
+  price: integer("price").default(0).notNull(),
+  certificateTemplateUrl: text("certificate_template_url"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),
@@ -63,6 +65,7 @@ export const modules = pgTable(
     title: text("title").notNull(),
     description: text("description"),
     order: integer("order").notNull(),
+    status: contentStatusEnum("status").default("draft").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -245,6 +248,8 @@ export const quizAttempts = pgTable("quiz_attempts", {
 
 export const coursesRelations = relations(courses, ({ many }) => ({
   modules: many(modules),
+  vocabularies: many(vocabularies),
+  enrollments: many(userEnrollments),
 }));
 
 export const modulesRelations = relations(modules, ({ one, many }) => ({
@@ -255,6 +260,7 @@ export const modulesRelations = relations(modules, ({ one, many }) => ({
   lessons: many(lessons),
   quizzes: many(quizzes),
   writingAssignments: many(writingAssignments),
+  vocabularies: many(vocabularies),
 }));
 
 export const lessonsRelations = relations(lessons, ({ one, many }) => ({
@@ -357,22 +363,26 @@ export const partOfSpeechEnum = pgEnum("part_of_speech", [
 ]);
 
 /**
- * Bảng tĩnh chứa kho từ vựng do Admin tạo/quản lý.
- * Mỗi bản ghi là một từ cụ thể ở một từ loại xác định.
+ * Bảng tĩnh chứa kho từ vựng do Admin tạo/quản lý (Flashcard nâng cao).
  */
 export const vocabularies = pgTable(
   "vocabularies",
   {
     id: text("id").primaryKey(),
     word: text("word").notNull(),
-    ipa: text("ipa").notNull(),
     partOfSpeech: partOfSpeechEnum("part_of_speech").notNull(),
-    meaningVi: text("meaning_vi").notNull(),
-    exampleEn: text("example_en").notNull(),
-    exampleVi: text("example_vi").notNull(),
-    audioUrl: text("audio_url"),
-    level: courseLevelEnum("level").notNull(),
-    topic: text("topic").notNull(),
+    phonetics: text("phonetics").notNull(),
+    definition: text("definition").notNull(),
+    translation: text("translation").notNull(),
+    example: text("example").notNull(),
+    exampleTranslation: text("example_translation").notNull(),
+    mediaUrl: text("media_url"),
+    courseId: text("course_id")
+      .notNull()
+      .references(() => courses.id, { onDelete: "cascade" }),
+    moduleId: text("module_id")
+      .references(() => modules.id, { onDelete: "cascade" }),
+    status: contentStatusEnum("status").default("draft").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -381,11 +391,8 @@ export const vocabularies = pgTable(
       .notNull(),
   },
   (table) => [
-    /**
-     * Cho phép cùng một từ tồn tại ở nhiều từ loại khác nhau
-     * (ví dụ: "run" là noun khi là danh từ, là verb khi là động từ).
-     */
-    uniqueIndex("vocabularies_word_part_of_speech_idx").on(
+    uniqueIndex("vocabularies_course_word_part_of_speech_idx").on(
+      table.courseId,
       table.word,
       table.partOfSpeech,
     ),
@@ -393,11 +400,29 @@ export const vocabularies = pgTable(
 );
 
 /**
- * Bảng trung gian lưu trữ từ vựng mà người dùng đã bookmark.
- * Composite primary key đảm bảo mỗi user chỉ bookmark một từ tối đa một lần.
+ * Bảng trung gian ghi nhận các khóa học người dùng đã đăng ký học.
  */
-export const userBookmarks = pgTable(
-  "user_bookmarks",
+export const userEnrollments = pgTable(
+  "user_enrollments",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    courseId: text("course_id")
+      .notNull()
+      .references(() => courses.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.courseId] })],
+);
+
+/**
+ * Bảng trung gian lưu vết từ vựng cá nhân phục vụ ôn tập (Sổ tay Quizlet-like).
+ */
+export const userSavedVocabularies = pgTable(
+  "user_saved_vocabularies",
   {
     userId: text("user_id")
       .notNull()
@@ -405,6 +430,7 @@ export const userBookmarks = pgTable(
     vocabularyId: text("vocabulary_id")
       .notNull()
       .references(() => vocabularies.id, { onDelete: "cascade" }),
+    isMastered: boolean("is_mastered").default(false).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -416,17 +442,36 @@ export const userBookmarks = pgTable(
 // 5a. VOCABULARY HUB — RELATIONS
 // ==========================================
 
-export const vocabulariesRelations = relations(vocabularies, ({ many }) => ({
-  bookmarks: many(userBookmarks),
+export const vocabulariesRelations = relations(vocabularies, ({ one, many }) => ({
+  course: one(courses, {
+    fields: [vocabularies.courseId],
+    references: [courses.id],
+  }),
+  module: one(modules, {
+    fields: [vocabularies.moduleId],
+    references: [modules.id],
+  }),
+  savedUsers: many(userSavedVocabularies),
 }));
 
-export const userBookmarksRelations = relations(userBookmarks, ({ one }) => ({
+export const userEnrollmentsRelations = relations(userEnrollments, ({ one }) => ({
   user: one(user, {
-    fields: [userBookmarks.userId],
+    fields: [userEnrollments.userId],
+    references: [user.id],
+  }),
+  course: one(courses, {
+    fields: [userEnrollments.courseId],
+    references: [courses.id],
+  }),
+}));
+
+export const userSavedVocabulariesRelations = relations(userSavedVocabularies, ({ one }) => ({
+  user: one(user, {
+    fields: [userSavedVocabularies.userId],
     references: [user.id],
   }),
   vocabulary: one(vocabularies, {
-    fields: [userBookmarks.vocabularyId],
+    fields: [userSavedVocabularies.vocabularyId],
     references: [vocabularies.id],
   }),
 }));

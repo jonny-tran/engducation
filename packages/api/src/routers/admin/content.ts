@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { eq, and, asc, sql, like, or } from "drizzle-orm";
+import { eq, and, asc, sql, like, or, inArray } from "drizzle-orm";
 import { z } from "zod";
 import crypto from "node:crypto";
 
@@ -13,6 +13,7 @@ import {
   questions,
   answers,
   userProgress,
+  vocabularies,
 } from "@engducation/db/schema";
 
 
@@ -30,7 +31,8 @@ const createCourseSchema = z.object({
   description: z.string().optional(),
   thumbnailUrl: z.string().url().optional().or(z.literal("")),
   level: courseLevelSchema,
-  status: contentStatusSchema.default("draft"),
+  price: z.number().int().min(0, "Giá không được nhỏ hơn 0").default(0),
+  certificateTemplateUrl: z.string().url().optional().nullable().or(z.literal("")),
 });
 
 
@@ -232,7 +234,9 @@ export const adminContentRouter = router({
         description: input.description ?? null,
         thumbnailUrl: input.thumbnailUrl ?? null,
         level: input.level,
-        status: input.status,
+        status: "draft",
+        price: input.price,
+        certificateTemplateUrl: input.certificateTemplateUrl ?? null,
       });
       return { id };
     }),
@@ -264,6 +268,70 @@ export const adminContentRouter = router({
         .where(eq(courses.id, id));
 
       return { id };
+    }),
+
+  coursePublish: adminProcedure
+    .input(z.object({ courseId: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      const { courseId } = input;
+      const existing = await ctx.db.query.courses.findFirst({
+        where: eq(courses.id, courseId),
+      });
+      if (!existing) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Khóa học không tồn tại",
+        });
+      }
+
+      await ctx.db.transaction(async (tx) => {
+        // 1. Update Course status to published
+        await tx
+          .update(courses)
+          .set({ status: "published", updatedAt: new Date() })
+          .where(eq(courses.id, courseId));
+
+        // 2. Update all Modules of this Course to published
+        await tx
+          .update(modules)
+          .set({ status: "published", updatedAt: new Date() })
+          .where(eq(modules.courseId, courseId));
+
+        // 3. Update all Vocabularies of this Course to published
+        await tx
+          .update(vocabularies)
+          .set({ status: "published", updatedAt: new Date() })
+          .where(eq(vocabularies.courseId, courseId));
+
+        // 4. Get all Module IDs to update Lessons, Quizzes, and Writing Assignments
+        const mods = await tx
+          .select({ id: modules.id })
+          .from(modules)
+          .where(eq(modules.courseId, courseId));
+        const modIds = mods.map((m) => m.id);
+
+        if (modIds.length > 0) {
+          // Update all Lessons
+          await tx
+            .update(lessons)
+            .set({ status: "published", updatedAt: new Date() })
+            .where(inArray(lessons.moduleId, modIds));
+
+          // Update all Quizzes
+          await tx
+            .update(quizzes)
+            .set({ status: "published", updatedAt: new Date() })
+            .where(inArray(quizzes.moduleId, modIds));
+
+          // Update all Writing Assignments
+          await tx
+            .update(writingAssignments)
+            .set({ status: "published", updatedAt: new Date() })
+            .where(inArray(writingAssignments.moduleId, modIds));
+        }
+      });
+
+      return { published: true };
     }),
 
   courseDelete: adminProcedure
@@ -419,7 +487,7 @@ export const adminContentRouter = router({
         videoPublicId: input.videoPublicId ?? null,
         videoUrl: input.videoUrl ?? null,
         order,
-        status: input.status,
+        status: "draft",
       });
 
       const created = await ctx.db.query.lessons.findFirst({
@@ -506,7 +574,7 @@ export const adminContentRouter = router({
         wordLimit: input.wordLimit ?? null,
         suggestedAnswer: input.suggestedAnswer ?? null,
         order,
-        status: input.status,
+        status: "draft",
       });
 
       const created = await ctx.db.query.writingAssignments.findFirst({
@@ -706,7 +774,7 @@ export const adminContentRouter = router({
         if (existingQuizId) {
           await tx
             .update(quizzes)
-            .set({ title, status, updatedAt: now })
+            .set({ title, status: status ?? "draft", updatedAt: now })
             .where(eq(quizzes.id, existingQuizId));
 
           const existingQs = await tx
@@ -732,7 +800,7 @@ export const adminContentRouter = router({
             moduleId,
             title,
             order,
-            status: status ?? "draft",
+            status: "draft",
           });
         }
       });

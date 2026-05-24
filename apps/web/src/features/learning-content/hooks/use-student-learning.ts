@@ -74,10 +74,65 @@ export function useStudentLearning(courseId?: string) {
     })
   );
 
+  const enrollCourse = useMutation(
+    trpc.user.courseEnroll.mutationOptions({
+      onSuccess: () => {
+        toast.success("Đăng ký khóa học thành công");
+        queryClient.invalidateQueries({
+          queryKey: trpc.user.courseList.queryKey(),
+        });
+        if (courseId) {
+          queryClient.invalidateQueries({
+            queryKey: trpc.user.courseGetDetail.queryKey({ courseId }),
+          });
+        }
+      },
+      onError: (err) => {
+        toast.error(`Lỗi đăng ký khóa học: ${err.message}`);
+      },
+    })
+  );
+
+  const toggleSaveVocabulary = useMutation(
+    trpc.userVocabulary.toggleSave.mutationOptions({
+      onSuccess: (data) => {
+        toast.success(data.saved ? "Đã lưu từ vựng vào sổ tay" : "Đã bỏ lưu từ vựng");
+        queryClient.invalidateQueries({
+          queryKey: trpc.userVocabulary.list.queryKey(),
+        });
+        queryClient.invalidateQueries({
+          queryKey: trpc.userVocabulary.getPersonalNotebook.queryKey(),
+        });
+      },
+      onError: (err) => {
+        toast.error(`Lỗi lưu từ vựng: ${err.message}`);
+      },
+    })
+  );
+
+  const updateNotebookStatus = useMutation(
+    trpc.userVocabulary.updateNotebookStatus.mutationOptions({
+      onSuccess: () => {
+        queryClient.invalidateQueries({
+          queryKey: trpc.userVocabulary.list.queryKey(),
+        });
+        queryClient.invalidateQueries({
+          queryKey: trpc.userVocabulary.getPersonalNotebook.queryKey(),
+        });
+      },
+      onError: (err) => {
+        toast.error(`Lỗi cập nhật trạng thái ôn tập: ${err.message}`);
+      },
+    })
+  );
+
   return {
     trackContentProgress,
     getMediaUrl,
     submitQuiz,
     submitWriting,
+    enrollCourse,
+    toggleSaveVocabulary,
+    updateNotebookStatus,
   };
 }

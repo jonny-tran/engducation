@@ -1,6 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { eq, and, ne, desc, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
+import crypto from "node:crypto";
 
 import { router, adminProcedure } from "../../index";
 import { vocabularies } from "@engducation/db/schema";
@@ -9,7 +10,6 @@ import { vocabularies } from "@engducation/db/schema";
 // ZOD SCHEMAS
 // ==========================================
 
-const courseLevelSchema = z.enum(["A1", "A2", "B1", "B2", "C1", "C2"]);
 const partOfSpeechSchema = z.enum([
   "noun",
   "verb",
@@ -22,31 +22,36 @@ const partOfSpeechSchema = z.enum([
 ]);
 
 const createVocabularySchema = z.object({
+  courseId: z.string().min(1, "Khóa học không được để trống"),
+  moduleId: z.string().optional().nullable(),
   word: z.string().min(1, "Từ gốc không được để trống"),
-  ipa: z.string().min(1, "Phiên âm không được để trống"),
   partOfSpeech: partOfSpeechSchema,
-  meaningVi: z.string().min(1, "Nghĩa tiếng Việt không được để trống"),
-  exampleEn: z.string().min(1, "Câu ví dụ tiếng Anh không được để trống"),
-  exampleVi: z.string().min(1, "Bản dịch câu ví dụ không được để trống"),
-  audioUrl: z
+  phonetics: z.string().min(1, "Phiên âm không được để trống"),
+  definition: z.string().min(1, "Định nghĩa không được để trống"),
+  translation: z.string().min(1, "Dịch nghĩa không được để trống"),
+  example: z.string().min(1, "Ví dụ không được để trống"),
+  exampleTranslation: z.string().min(1, "Dịch ví dụ không được để trống"),
+  mediaUrl: z
     .string()
     .url()
     .optional()
+    .nullable()
     .or(z.literal(""))
     .transform((v) => (v === "" ? null : v)),
-  level: courseLevelSchema,
-  topic: z.string().min(1, "Chủ đề không được để trống"),
 });
 
 const updateVocabularySchema = z.object({
   id: z.string().min(1),
+  courseId: z.string().optional(),
+  moduleId: z.string().optional().nullable(),
   word: z.string().min(1).optional(),
-  ipa: z.string().min(1).optional(),
   partOfSpeech: partOfSpeechSchema.optional(),
-  meaningVi: z.string().min(1).optional(),
-  exampleEn: z.string().min(1).optional(),
-  exampleVi: z.string().min(1).optional(),
-  audioUrl: z
+  phonetics: z.string().min(1).optional(),
+  definition: z.string().min(1).optional(),
+  translation: z.string().min(1).optional(),
+  example: z.string().min(1).optional(),
+  exampleTranslation: z.string().min(1).optional(),
+  mediaUrl: z
     .string()
     .url()
     .optional()
@@ -54,8 +59,6 @@ const updateVocabularySchema = z.object({
     .or(z.literal(""))
     .transform((v) => (v === "" ? null : v))
     .optional(),
-  level: courseLevelSchema.optional(),
-  topic: z.string().min(1).optional(),
 });
 
 // ==========================================
@@ -70,32 +73,38 @@ export const adminVocabularyRouter = router({
     .mutation(async ({ ctx, input }) => {
       // Chuẩn hóa: trim + lowercase từ gốc
       const sanitizedWord = input.word.trim().toLowerCase();
-      const pos = input.partOfSpeech as z.infer<typeof partOfSpeechSchema>;
+      const pos = input.partOfSpeech;
 
-      // Kiểm tra trùng lặp [word, partOfSpeech] trước khi INSERT
+      // Kiểm tra trùng lặp [courseId, word, partOfSpeech] trước khi INSERT
       const existing = await ctx.db.query.vocabularies.findFirst({
-        where: and(eq(vocabularies.word, sanitizedWord), eq(vocabularies.partOfSpeech, pos)),
+        where: and(
+          eq(vocabularies.courseId, input.courseId),
+          eq(vocabularies.word, sanitizedWord),
+          eq(vocabularies.partOfSpeech, pos)
+        ),
       });
 
       if (existing) {
         throw new TRPCError({
           code: "CONFLICT",
-          message: "Từ vựng này với từ loại tương ứng đã tồn tại trong hệ thống.",
+          message: "Từ vựng này với từ loại tương ứng đã tồn tại trong khóa học này.",
         });
       }
 
       const id = crypto.randomUUID();
       await ctx.db.insert(vocabularies).values({
         id,
+        courseId: input.courseId,
+        moduleId: input.moduleId ?? null,
         word: sanitizedWord,
-        ipa: input.ipa.trim(),
         partOfSpeech: pos,
-        meaningVi: input.meaningVi.trim(),
-        exampleEn: input.exampleEn.trim(),
-        exampleVi: input.exampleVi.trim(),
-        audioUrl: input.audioUrl,
-        level: input.level,
-        topic: input.topic.trim(),
+        phonetics: input.phonetics.trim(),
+        definition: input.definition.trim(),
+        translation: input.translation.trim(),
+        example: input.example.trim(),
+        exampleTranslation: input.exampleTranslation.trim(),
+        mediaUrl: input.mediaUrl,
+        status: "draft",
       });
 
       const created = await ctx.db.query.vocabularies.findFirst({
@@ -128,40 +137,44 @@ export const adminVocabularyRouter = router({
         });
       }
 
+      const courseId = input.courseId ?? existing.courseId;
+
       // Nếu thay đổi word hoặc partOfSpeech → kiểm tra xung đột (loại trừ chính nó)
-      if (input.word !== undefined || input.partOfSpeech !== undefined) {
-        const newWord = input.word!.trim().toLowerCase();
+      if (input.word !== undefined || input.partOfSpeech !== undefined || input.courseId !== undefined) {
+        const newWord = (input.word ?? existing.word).trim().toLowerCase();
         const newPos = input.partOfSpeech ?? existing.partOfSpeech;
 
         const conflict = await ctx.db.query.vocabularies.findFirst({
           where: and(
+            eq(vocabularies.courseId, courseId),
             eq(vocabularies.word, newWord),
             eq(vocabularies.partOfSpeech, newPos),
-            ne(vocabularies.id, input.id),
+            ne(vocabularies.id, input.id)
           ),
         });
 
         if (conflict) {
           throw new TRPCError({
             code: "CONFLICT",
-            message: "Từ vựng này với từ loại tương ứng đã tồn tại trong hệ thống.",
+            message: "Từ vựng này với từ loại tương ứng đã tồn tại trong khóa học.",
           });
         }
       }
 
-      // Xây dựng object cập nhật tường minh theo từng trường
+      // Cập nhật
       await ctx.db
         .update(vocabularies)
         .set({
+          ...(input.courseId !== undefined && { courseId: input.courseId }),
+          ...(input.moduleId !== undefined && { moduleId: input.moduleId }),
           ...(input.word !== undefined && { word: input.word.trim().toLowerCase() }),
-          ...(input.ipa !== undefined && { ipa: input.ipa.trim() }),
           ...(input.partOfSpeech !== undefined && { partOfSpeech: input.partOfSpeech }),
-          ...(input.meaningVi !== undefined && { meaningVi: input.meaningVi.trim() }),
-          ...(input.exampleEn !== undefined && { exampleEn: input.exampleEn.trim() }),
-          ...(input.exampleVi !== undefined && { exampleVi: input.exampleVi.trim() }),
-          ...(input.audioUrl !== undefined && { audioUrl: input.audioUrl }),
-          ...(input.level !== undefined && { level: input.level }),
-          ...(input.topic !== undefined && { topic: input.topic.trim() }),
+          ...(input.phonetics !== undefined && { phonetics: input.phonetics.trim() }),
+          ...(input.definition !== undefined && { definition: input.definition.trim() }),
+          ...(input.translation !== undefined && { translation: input.translation.trim() }),
+          ...(input.example !== undefined && { example: input.example.trim() }),
+          ...(input.exampleTranslation !== undefined && { exampleTranslation: input.exampleTranslation.trim() }),
+          ...(input.mediaUrl !== undefined && { mediaUrl: input.mediaUrl }),
           updatedAt: new Date(),
         })
         .where(eq(vocabularies.id, input.id));
@@ -187,7 +200,7 @@ export const adminVocabularyRouter = router({
         });
       }
 
-      // Cascade delete: DB tự dọn sạch user_bookmarks liên quan
+      // DB tự cascade delete liên kết userSavedVocabularies
       await ctx.db.delete(vocabularies).where(eq(vocabularies.id, input.id));
       return { deleted: true };
     }),
@@ -201,13 +214,13 @@ export const adminVocabularyRouter = router({
           page: z.number().int().min(1).default(1),
           pageSize: z.number().int().min(1).max(100).default(20),
           search: z.string().optional(),
-          level: courseLevelSchema.optional(),
-          topic: z.string().optional(),
+          courseId: z.string().optional(),
+          moduleId: z.string().optional(),
         })
         .optional(),
     )
     .query(async ({ ctx, input }) => {
-      const { page = 1, pageSize = 20, search, level, topic } = input ?? {};
+      const { page = 1, pageSize = 20, search, courseId, moduleId } = input ?? {};
       const offset = (page - 1) * pageSize;
 
       const filters: SQL[] = [];
@@ -216,10 +229,9 @@ export const adminVocabularyRouter = router({
           sql`${vocabularies.word} ILIKE ${`%${search.toLowerCase()}%`}`,
         );
       }
-      if (level) filters.push(eq(vocabularies.level, level));
-      if (topic) filters.push(eq(vocabularies.topic, topic));
+      if (courseId) filters.push(eq(vocabularies.courseId, courseId));
+      if (moduleId) filters.push(eq(vocabularies.moduleId, moduleId));
 
-      // and() nhận rest params, không phải array
       const whereClause = filters.length > 1 ? and(...filters) : filters[0];
 
       const [items, countResult] = await Promise.all([

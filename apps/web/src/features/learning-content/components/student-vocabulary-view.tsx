@@ -18,43 +18,87 @@ const PAGE_SIZE = 8; // Beautiful grid layout
 
 export function StudentVocabularyView() {
   const router = useRouter();
-  const { data: session } = authClient.useSession();
+  const { data: session, isPending: isSessionPending } = authClient.useSession();
   const queryClient = useQueryClient();
 
-  // Page States
+  // Selected Course ID State
+  const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
+
+  // Page States for Vocabulary List
   const [currentPage, setCurrentPage] = useState(1);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [selectedLevel, setSelectedLevel] = useState<CefrLevel | "ALL">("ALL");
-  const [selectedTopic, setSelectedTopic] = useState("");
 
-  // Fetch Public List of Vocabularies
-  const { data, isLoading } = useQuery(
-    trpc.userVocabulary.list.queryOptions(
+  // 1. Fetch available/published courses
+  const { data: coursesData, isLoading: isCoursesLoading } = useQuery(
+    trpc.user.courseList.queryOptions(
       {
-        page: currentPage,
-        pageSize: PAGE_SIZE,
-        search: debouncedSearch || undefined,
-        level: selectedLevel === "ALL" ? undefined : selectedLevel,
-        topic: selectedTopic || undefined,
+        page: 1,
+        pageSize: 100, // Load all for selector
       },
       {
-        staleTime: 1000 * 60 * 60, // Keep in cache for 1 hour
-        gcTime: 1000 * 60 * 60 * 24, // Garbarge collect after 24 hours
+        enabled: !!session,
       }
     )
   );
 
-  // Toggle Bookmark Mutation with robust Optimistic Update
-  const toggleBookmark = useMutation(
-    trpc.userVocabulary.toggleBookmark.mutationOptions({
+  const coursesList = coursesData?.items ?? [];
+  const selectedCourse = coursesList.find((c) => c.id === selectedCourseId) || coursesList[0];
+
+  // Sync selectedCourseId when courses list finishes loading
+  if (coursesList.length > 0 && !selectedCourseId) {
+    setSelectedCourseId(coursesList[0].id);
+  }
+
+  // 2. Fetch vocabulary list for selected course if enrolled
+  const isEnrolled = selectedCourse?.isEnrolled ?? false;
+
+  const { data: vocabData, isLoading: isVocabLoading } = useQuery(
+    trpc.userVocabulary.list.queryOptions(
+      {
+        courseId: selectedCourseId || "",
+        page: currentPage,
+        pageSize: PAGE_SIZE,
+        search: debouncedSearch || undefined,
+      },
+      {
+        enabled: !!session && !!selectedCourseId && isEnrolled,
+        staleTime: 1000 * 60 * 10, // 10 minutes cache
+      }
+    )
+  );
+
+  // 3. Enroll Course Mutation
+  const enrollCourse = useMutation(
+    trpc.user.courseEnroll.mutationOptions({
+      onSuccess: () => {
+        toast.success("Đăng ký khóa học thành công! Từ vựng đã được mở khóa.");
+        queryClient.invalidateQueries({
+          queryKey: trpc.user.courseList.queryKey(),
+        });
+        if (selectedCourseId) {
+          queryClient.invalidateQueries({
+            queryKey: trpc.userVocabulary.list.queryKey({ courseId: selectedCourseId }),
+          });
+        }
+      },
+      onError: (err) => {
+        toast.error(`Đăng ký khóa học thất bại: ${err.message}`);
+      },
+    })
+  );
+
+  // 4. Toggle Save Mutation with robust Optimistic Update
+  const toggleSave = useMutation(
+    trpc.userVocabulary.toggleSave.mutationOptions({
       onMutate: async ({ vocabularyId }: { vocabularyId: string }) => {
+        if (!selectedCourseId) return;
+
         const filterKey = {
+          courseId: selectedCourseId,
           page: currentPage,
           pageSize: PAGE_SIZE,
           search: debouncedSearch || undefined,
-          level: selectedLevel === "ALL" ? undefined : selectedLevel,
-          topic: selectedTopic || undefined,
         };
 
         const queryKey = trpc.userVocabulary.list.queryKey(filterKey);
@@ -71,7 +115,7 @@ export function StudentVocabularyView() {
             ...previousData,
             items: previousData.items.map((item: any) =>
               item.id === vocabularyId
-                ? { ...item, isBookmarked: !item.isBookmarked }
+                ? { ...item, isSaved: !item.isSaved }
                 : item
             ),
           });
@@ -103,7 +147,7 @@ export function StudentVocabularyView() {
       router.push("/login");
       return;
     }
-    toggleBookmark.mutate({ vocabularyId: id });
+    toggleSave.mutate({ vocabularyId: id });
   };
 
   const handleSearchChange = (value: string) => {
@@ -116,18 +160,39 @@ export function StudentVocabularyView() {
   const clearFilters = () => {
     setSearch("");
     setDebouncedSearch("");
-    setSelectedLevel("ALL");
-    setSelectedTopic("");
     setCurrentPage(1);
   };
 
-  const hasFilters = !!search || selectedLevel !== "ALL" || !!selectedTopic;
-  const items = data?.items ?? [];
-  const pagination = data?.pagination;
-  const totalPages = pagination?.totalPages ?? 1;
+  const handleEnroll = () => {
+    if (!selectedCourseId) return;
+    enrollCourse.mutate({ courseId: selectedCourseId });
+  };
 
-  // Extract unique topics from the items to populate filters dynamically
-  const topics = Array.from(new Set(items.map((v) => v.topic))).sort();
+  // If loading session, return clean visual skeleton
+  if (isSessionPending || isCoursesLoading) {
+    return (
+      <div className="space-y-6 animate-pulse">
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-12 w-64 rounded-xl" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-44 rounded-2xl" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // Redirect if guest visits page directly
+  if (!session) {
+    router.push("/login");
+    return null;
+  }
+
+  const hasFilters = !!search;
+  const items = vocabData?.items ?? [];
+  const pagination = vocabData?.pagination;
+  const totalPages = pagination?.totalPages ?? 1;
 
   return (
     <div className="space-y-6">
@@ -141,126 +206,161 @@ export function StudentVocabularyView() {
         </Link>
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="flex flex-col lg:flex-row gap-4 justify-between items-stretch lg:items-center">
-        {/* Search Input */}
-        <div className="relative max-w-md w-full">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => handleSearchChange(e.target.value)}
-            placeholder="Tìm tên từ vựng hoặc nghĩa tiếng Việt..."
-            className="pl-9 h-9 text-xs rounded-xl border-border bg-card shadow-sm"
-          />
-        </div>
-
-        {/* Filters pills and select dropdown */}
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-[10px] font-bold uppercase text-muted-foreground mr-1.5 flex items-center gap-1">
-              <Filter className="h-3 w-3" /> Cấp độ:
-            </span>
-            <Button
-              variant={selectedLevel === "ALL" ? "default" : "outline"}
-              onClick={() => { setSelectedLevel("ALL"); setCurrentPage(1); }}
-              className="h-7 text-[10px] font-bold px-3 rounded-full"
-            >
-              TẤT CẢ
-            </Button>
-            {CEFR_LEVELS.map((lvl) => (
-              <Button
-                key={lvl}
-                variant={selectedLevel === lvl ? "default" : "outline"}
-                onClick={() => { setSelectedLevel(lvl); setCurrentPage(1); }}
-                className="h-7 text-[10px] font-black px-3 rounded-full"
-              >
-                {lvl}
-              </Button>
-            ))}
-          </div>
-
-          {topics.length > 0 && (
-            <select
-              value={selectedTopic}
-              onChange={(e) => { setSelectedTopic(e.target.value); setCurrentPage(1); }}
-              className="flex h-7 border border-input bg-background px-2.5 py-1 text-[10px] font-bold text-foreground shadow-sm outline-none rounded-full"
-            >
-              <option value="">Tất cả chủ đề</option>
-              {topics.map((topic) => (
-                <option key={topic} value={topic}>#{topic}</option>
-              ))}
-            </select>
-          )}
-
-          {hasFilters && (
-            <Button variant="ghost" size="sm" onClick={clearFilters} className="h-7 text-[10px] font-bold gap-1 rounded-full text-muted-foreground hover:text-foreground">
-              <X className="h-3 w-3" /> Xóa lọc
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {/* Main Grid View */}
-      {isLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {Array.from({ length: PAGE_SIZE }).map((_, idx) => (
-            <Skeleton key={idx} className="h-44 rounded-2xl bg-card border" />
-          ))}
-        </div>
-      ) : items.length === 0 ? (
+      {coursesList.length === 0 ? (
         <div className="p-16 border border-dashed border-border rounded-3xl bg-muted/5 flex flex-col items-center justify-center text-center space-y-3">
           <span className="text-4xl">📚</span>
-          <div className="font-bold text-sm text-foreground">Không tìm thấy từ vựng nào phù hợp</div>
-          <p className="text-[11px] text-muted-foreground max-w-sm leading-relaxed">
-            Hệ thống chưa tìm thấy từ vựng nào đáp ứng bộ lọc của bạn. Hãy thử thay đổi bộ lọc hoặc mở rộng từ khóa tìm kiếm.
+          <div className="font-bold text-sm text-foreground">Chưa có khóa học nào được xuất bản</div>
+          <p className="text-[11px] text-muted-foreground max-w-sm">
+            Hệ thống đang cập nhật các khóa học mới. Vui lòng quay lại sau!
           </p>
-          {hasFilters && (
-            <Button variant="outline" onClick={clearFilters} className="text-xs font-bold rounded-xl mt-2">
-              Khôi phục bộ lọc
-            </Button>
-          )}
         </div>
       ) : (
-        <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {items.map((vocab) => (
-              <VocabularyCard
-                key={vocab.id}
-                vocabulary={vocab}
-                onToggleBookmark={handleToggleBookmark}
-              />
-            ))}
+        <div className="space-y-6">
+          {/* Course Selector bar */}
+          <div className="bg-card border border-border p-4 rounded-2xl flex flex-col md:flex-row gap-4 items-start md:items-center justify-between shadow-sm">
+            <div className="space-y-1">
+              <span className="text-[10px] font-black uppercase text-primary tracking-wider">Khóa học đang chọn</span>
+              <div className="flex items-center gap-2">
+                <select
+                  value={selectedCourseId || ""}
+                  onChange={(e) => {
+                    setSelectedCourseId(e.target.value);
+                    setCurrentPage(1);
+                    clearFilters();
+                  }}
+                  className="font-extrabold text-sm text-foreground bg-transparent border-b border-muted-foreground/30 focus:border-primary outline-none py-1 pr-6"
+                >
+                  {coursesList.map((course) => (
+                    <option key={course.id} value={course.id} className="text-foreground bg-background">
+                      [{course.level}] {course.title} {course.isEnrolled ? "(Đã đăng ký)" : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {selectedCourse && (
+              <div className="flex items-center gap-3">
+                <span className={`text-[10px] font-extrabold px-3 py-1 rounded-full uppercase border ${selectedCourse.isEnrolled ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" : "bg-amber-500/10 text-amber-600 border-amber-500/20"}`}>
+                  {selectedCourse.isEnrolled ? "Đã đăng ký" : "Chưa đăng ký"}
+                </span>
+                {selectedCourse.price > 0 ? (
+                  <span className="text-xs font-black text-indigo-600">
+                    {selectedCourse.price.toLocaleString("vi-VN")} đ
+                  </span>
+                ) : (
+                  <span className="text-xs font-black text-emerald-600 uppercase">Miễn phí</span>
+                )}
+              </div>
+            )}
           </div>
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex justify-center items-center gap-3 pt-6 border-t border-border/50">
+          {!isEnrolled ? (
+            /* Locked State UI */
+            <div className="p-16 border border-dashed border-border rounded-3xl bg-amber-500/5 flex flex-col items-center justify-center text-center space-y-4">
+              <span className="text-5xl">🔒</span>
+              <div className="font-black text-base text-foreground">Nội dung từ vựng đang bị khóa</div>
+              <p className="text-xs text-muted-foreground max-w-md leading-relaxed">
+                Từ vựng của khóa học <span className="font-bold text-foreground">“{selectedCourse?.title}”</span> được thiết kế chuyên biệt song hành cùng bài học. Hãy đăng ký khóa học này để mở khóa toàn bộ kho từ vựng Flashcard!
+              </p>
               <Button
-                variant="outline"
-                size="icon"
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-                className="h-8 w-8 rounded-xl"
+                onClick={handleEnroll}
+                disabled={enrollCourse.isPending}
+                className="text-xs font-bold px-6 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl shadow-md"
               >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-
-              <span className="text-[10px] font-bold text-muted-foreground font-mono">
-                Trang {currentPage} / {totalPages} — {pagination?.total} từ vựng
-              </span>
-
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                disabled={currentPage === totalPages}
-                className="h-8 w-8 rounded-xl"
-              >
-                <ChevronRight className="h-4 w-4" />
+                {enrollCourse.isPending ? "Đang xử lý..." : "Đăng ký khóa học ngay"}
               </Button>
             </div>
+          ) : (
+            /* Unlocked Vocabulary List */
+            <div className="space-y-6">
+              {/* Search Bar */}
+              <div className="flex flex-col lg:flex-row gap-4 justify-between items-stretch lg:items-center">
+                <div className="relative max-w-md w-full">
+                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    value={search}
+                    onChange={(e) => handleSearchChange(e.target.value)}
+                    placeholder="Tìm tên từ vựng hoặc nghĩa tiếng Việt..."
+                    className="pl-9 h-9 text-xs rounded-xl border-border bg-card shadow-sm"
+                  />
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3">
+                  {hasFilters && (
+                    <Button variant="ghost" size="sm" onClick={clearFilters} className="h-7 text-[10px] font-bold gap-1 rounded-full text-muted-foreground hover:text-foreground">
+                      <X className="h-3 w-3" /> Xóa lọc
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              {isVocabLoading ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                  {Array.from({ length: PAGE_SIZE }).map((_, idx) => (
+                    <Skeleton key={idx} className="h-44 rounded-2xl bg-card border" />
+                  ))}
+                </div>
+              ) : items.length === 0 ? (
+                <div className="p-16 border border-dashed border-border rounded-3xl bg-muted/5 flex flex-col items-center justify-center text-center space-y-3">
+                  <span className="text-4xl">📚</span>
+                  <div className="font-bold text-sm text-foreground">Không tìm thấy từ vựng nào</div>
+                  <p className="text-[11px] text-muted-foreground max-w-sm">
+                    {hasFilters
+                      ? "Không tìm thấy từ vựng nào đáp ứng từ khóa tìm kiếm của bạn."
+                      : "Khóa học này chưa có từ vựng nào được cập nhật."}
+                  </p>
+                  {hasFilters && (
+                    <Button variant="outline" onClick={clearFilters} className="text-xs font-bold rounded-xl mt-2">
+                      Khôi phục bộ lọc
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                    {items.map((vocab) => (
+                      <VocabularyCard
+                        key={vocab.id}
+                        vocabulary={vocab}
+                        onToggleBookmark={handleToggleBookmark}
+                      />
+                    ))}
+                  </div>
+
+                  {/* Pagination */}
+                  {totalPages > 1 && (
+                    <div className="flex justify-center items-center gap-3 pt-6 border-t border-border/50">
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                        disabled={currentPage === 1}
+                        className="h-8 w-8 rounded-xl"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+
+                      <span className="text-[10px] font-bold text-muted-foreground font-mono">
+                        Trang {currentPage} / {totalPages} — {pagination?.total} từ vựng
+                      </span>
+
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                        disabled={currentPage === totalPages}
+                        className="h-8 w-8 rounded-xl"
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
           )}
-        </>
+        </div>
       )}
     </div>
   );

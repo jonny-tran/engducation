@@ -1,10 +1,11 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { trpc } from "@/utils/trpc";
 import { useCourseMutations } from "@/features/learning-content";
 import { AdminCourseForm } from "@/features/learning-content";
 import { AdminLessonManager } from "@/features/learning-content";
+import { AdminVocabularyManager } from "@/features/learning-content";
 import { Button } from "@engducation/ui/components/button";
 import { Input } from "@engducation/ui/components/input";
 import { Card, CardContent } from "@engducation/ui/components/card";
@@ -41,7 +42,41 @@ export default function AdminCoursesPage() {
   // Delete confirmation
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string; lessonCount: number } | null>(null);
 
-  const { deleteCourse } = useCourseMutations();
+  const { deleteCourse, publishCourse } = useCourseMutations();
+
+  const [activeTab, setActiveTab] = useState<"lessons" | "vocabulary">("lessons");
+  const [preselectedModuleId, setPreselectedModuleId] = useState<string>("");
+  const [vocabTrigger, setVocabTrigger] = useState<number>(0);
+
+  useEffect(() => {
+    setActiveTab("lessons");
+    setPreselectedModuleId("");
+    setVocabTrigger(0);
+  }, [selectedCourseId]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const searchParams = new URLSearchParams(window.location.search);
+      const courseIdParam = searchParams.get("courseId");
+      const moduleIdParam = searchParams.get("moduleId");
+      if (courseIdParam) {
+        setSelectedCourseId(courseIdParam);
+        if (moduleIdParam) {
+          setPreselectedModuleId(moduleIdParam);
+          setVocabTrigger((prev) => prev + 1);
+          setActiveTab("vocabulary");
+        }
+        
+        // Clean up search parameters so they don't get re-triggered
+        const params = new URLSearchParams(window.location.search);
+        params.delete("courseId");
+        params.delete("moduleId");
+        params.delete("trigger");
+        const newUrl = window.location.pathname + (params.toString() ? `?${params.toString()}` : "");
+        window.history.replaceState(null, "", newUrl);
+      }
+    }
+  }, []);
 
   // Fetch course list with filters
   const { data: coursesData, isLoading } = useQuery(
@@ -187,9 +222,8 @@ export default function AdminCoursesPage() {
                     {coursesData.items.map((course) => (
                       <div
                         key={course.id}
-                        className={`p-3 hover:bg-muted/30 cursor-pointer transition-colors ${
-                          selectedCourseId === course.id ? "bg-muted/60" : ""
-                        }`}
+                        className={`p-3 hover:bg-muted/30 cursor-pointer transition-colors ${selectedCourseId === course.id ? "bg-muted/60" : ""
+                          }`}
                         onClick={() => {
                           setSelectedCourseId(course.id);
                         }}
@@ -203,20 +237,41 @@ export default function AdminCoursesPage() {
                               </Badge>
                               <Badge
                                 variant="outline"
-                                className={`text-[9px] font-bold uppercase ${
-                                  course.status === "published"
-                                    ? "border-emerald-500/20 text-emerald-600"
-                                    : "border-amber-500/20 text-amber-600"
-                                }`}
+                                className={`text-[9px] font-bold uppercase ${course.status === "published"
+                                  ? "border-emerald-500/20 text-emerald-600"
+                                  : "border-amber-500/20 text-amber-600"
+                                  }`}
                               >
                                 {course.status}
                               </Badge>
+                              {course.certificateTemplateUrl && (
+                                <Badge variant="outline" className="text-[9px] font-bold uppercase border-blue-500/20 text-blue-600">
+                                  Chứng chỉ
+                                </Badge>
+                              )}
                               <span className="text-[9px] text-muted-foreground">
                                 {course.lessonCount} bài học
                               </span>
                             </div>
+                            <div className="text-[10px] text-muted-foreground mt-1 font-medium">
+                              Giá: {course.price === 0 ? "Miễn phí" : `${course.price.toLocaleString("vi-VN")} VNĐ`}
+                            </div>
                           </div>
-                          <div className="flex gap-1 shrink-0">
+                          <div className="flex gap-1 shrink-0 items-center">
+                            {course.status !== "published" && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  await publishCourse.mutateAsync({ courseId: course.id });
+                                }}
+                                className="h-6 px-2 text-[10px] font-bold border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/10"
+                                disabled={publishCourse.isPending}
+                              >
+                                {publishCourse.isPending ? "..." : "Xuất bản"}
+                              </Button>
+                            )}
                             <Button
                               variant="ghost"
                               size="sm"
@@ -311,11 +366,10 @@ export default function AdminCoursesPage() {
                           </Badge>
                           <Badge
                             variant="outline"
-                            className={`text-[10px] font-bold uppercase ${
-                              courseDetail.status === "published"
-                                ? "border-emerald-500/20 text-emerald-600"
-                                : "border-amber-500/20 text-amber-600"
-                            }`}
+                            className={`text-[10px] font-bold uppercase ${courseDetail.status === "published"
+                              ? "border-emerald-500/20 text-emerald-600"
+                              : "border-amber-500/20 text-amber-600"
+                              }`}
                           >
                             {courseDetail.status}
                           </Badge>
@@ -338,10 +392,48 @@ export default function AdminCoursesPage() {
                   </CardContent>
                 </Card>
 
-                <AdminLessonManager
-                  courseId={selectedCourseId}
-                  modules={courseDetail.modules}
-                />
+                {/* Tabs Switcher for Syllabus & Vocabulary */}
+                <div className="flex border-b border-border bg-card shadow-sm rounded-t-xl overflow-hidden mb-4">
+                  <button
+                    onClick={() => setActiveTab("lessons")}
+                    className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider border-b-2 transition-all duration-300 ${activeTab === "lessons"
+                      ? "border-emerald-500 text-emerald-600 bg-emerald-500/5"
+                      : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/10"
+                      }`}
+                  >
+                    Giáo trình & Bài học
+                  </button>
+                  <button
+                    onClick={() => {
+                      setPreselectedModuleId("");
+                      setActiveTab("vocabulary");
+                    }}
+                    className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider border-b-2 transition-all duration-300 ${activeTab === "vocabulary"
+                      ? "border-emerald-500 text-emerald-600 bg-emerald-500/5"
+                      : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/10"
+                      }`}
+                  >
+                    Từ vựng khóa học
+                  </button>
+                </div>
+
+                {activeTab === "lessons" ? (
+                  <AdminLessonManager
+                    courseId={selectedCourseId}
+                    modules={courseDetail.modules}
+                    onManageVocabulary={(moduleId) => {
+                      setPreselectedModuleId(moduleId);
+                      setVocabTrigger((prev) => prev + 1);
+                      setActiveTab("vocabulary");
+                    }}
+                  />
+                ) : (
+                  <AdminVocabularyManager
+                    courseId={selectedCourseId}
+                    moduleId={preselectedModuleId}
+                    trigger={vocabTrigger}
+                  />
+                )}
               </div>
             ) : null}
           </div>
@@ -382,8 +474,8 @@ export default function AdminCoursesPage() {
               {deleteCourse.isPending
                 ? "Đang xóa..."
                 : (deleteTarget?.lessonCount ?? 0) > 0
-                ? "Còn bài học"
-                : "Xóa khóa học"}
+                  ? "Còn bài học"
+                  : "Xóa khóa học"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

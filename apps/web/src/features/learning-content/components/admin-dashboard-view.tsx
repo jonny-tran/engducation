@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { useRouter, useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { trpc } from "@/utils/trpc";
 import { useCourseMutations } from "../hooks/use-course-mutations";
@@ -11,7 +12,10 @@ import { Card, CardHeader, CardTitle, CardContent } from "@engducation/ui/compon
 import { Badge } from "@engducation/ui/components/badge";
 
 export function AdminDashboardView() {
-  const { deleteCourse, updateCourse } = useCourseMutations();
+  const router = useRouter();
+  const params = useParams();
+  const adminId = params.adminId as string;
+  const { deleteCourse, updateCourse, publishCourse } = useCourseMutations();
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
   const [editingCourse, setEditingCourse] = useState<any | null>(null);
 
@@ -28,13 +32,7 @@ export function AdminDashboardView() {
     )
   );
 
-  const handleToggleStatus = async (course: any) => {
-    const nextStatus = course.status === "published" ? "draft" : "published";
-    await updateCourse.mutateAsync({
-      id: course.id,
-      status: nextStatus,
-    });
-  };
+
 
   const handleDeleteCourse = async (id: string) => {
     if (confirm("Bạn có chắc chắn muốn xóa khóa học này?")) {
@@ -88,14 +86,23 @@ export function AdminDashboardView() {
                     return (
                       <tr
                         key={course.id}
-                        className={`hover:bg-muted/30 ${
-                          isSelected ? "bg-muted/60 font-medium" : ""
-                        }`}
+                        className={`hover:bg-muted/30 ${isSelected ? "bg-muted/60 font-medium" : ""
+                          }`}
                       >
                         <td className="p-2.5">
                           <div className="font-bold">{course.title}</div>
                           {course.description && (
                             <div className="text-[10px] text-muted-foreground mt-0.5 line-clamp-1">{course.description}</div>
+                          )}
+                          <div className="text-[10px] text-muted-foreground mt-0.5 font-medium">
+                            Giá: {course.price === 0 ? "Miễn phí" : `${course.price.toLocaleString("vi-VN")} VNĐ`}
+                          </div>
+                          {course.certificateTemplateUrl && (
+                            <div className="mt-1">
+                              <Badge variant="outline" className="text-[9px] font-bold uppercase border-blue-500/20 text-blue-600">
+                                Chứng chỉ
+                              </Badge>
+                            </div>
                           )}
                           <div className="text-[9px] text-muted-foreground font-mono mt-0.5 select-all">ID: {course.id}</div>
                         </td>
@@ -108,11 +115,10 @@ export function AdminDashboardView() {
                         <td className="p-2.5 text-center">
                           <Badge
                             variant="outline"
-                            className={`text-[10px] font-bold uppercase ${
-                              course.status === "published"
+                            className={`text-[10px] font-bold uppercase ${course.status === "published"
                                 ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
                                 : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20"
-                            }`}
+                              }`}
                           >
                             {course.status.toUpperCase()}
                           </Badge>
@@ -137,14 +143,28 @@ export function AdminDashboardView() {
                             >
                               SỬA
                             </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleToggleStatus(course)}
-                              className="text-[10px] font-bold"
-                            >
-                              {course.status === "published" ? "DRAFT" : "PUBLISH"}
-                            </Button>
+                            {course.status !== "published" ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={async () => {
+                                  await publishCourse.mutateAsync({ courseId: course.id });
+                                }}
+                                className="text-[10px] font-bold border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/10"
+                                disabled={publishCourse.isPending}
+                              >
+                                {publishCourse.isPending ? "..." : "PUBLISH"}
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled
+                                className="text-[10px] font-bold opacity-60"
+                              >
+                                PUBLISHED
+                              </Button>
+                            )}
                             <Button
                               variant="destructive"
                               size="sm"
@@ -190,6 +210,9 @@ export function AdminDashboardView() {
               <AdminLessonManager
                 courseId={selectedCourseId}
                 modules={courseDetail.modules}
+                onManageVocabulary={(moduleId) => {
+                  router.push(`/admin/${adminId}/courses?courseId=${selectedCourseId}&moduleId=${moduleId}&trigger=1`);
+                }}
               />
             ) : (
               <p className="text-xs italic text-slate-500">Không tìm thấy chi tiết khóa học.</p>

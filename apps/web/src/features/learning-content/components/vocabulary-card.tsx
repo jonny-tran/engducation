@@ -10,15 +10,15 @@ export interface VocabularyCardProps {
   vocabulary: {
     id: string;
     word: string;
-    ipa: string;
+    phonetics: string;
     partOfSpeech: string;
-    meaningVi: string;
-    exampleEn: string;
-    exampleVi: string;
-    audioUrl: string | null;
-    level: string;
-    topic: string;
-    isBookmarked?: boolean;
+    definition: string;
+    translation: string;
+    example: string;
+    exampleTranslation: string;
+    mediaUrl: string | null;
+    isSaved?: boolean;
+    isMastered?: boolean;
   };
   onToggleBookmark: (id: string) => Promise<void> | void;
 }
@@ -27,9 +27,9 @@ export function VocabularyCard({ vocabulary, onToggleBookmark }: VocabularyCardP
   const [isPlaying, setIsPlaying] = useState(false);
 
   const handlePlayAudio = () => {
-    if (!vocabulary.audioUrl) return;
+    if (!vocabulary.mediaUrl) return;
     setIsPlaying(true);
-    const audio = new Audio(vocabulary.audioUrl);
+    const audio = new Audio(vocabulary.mediaUrl);
     audio.play()
       .then(() => {
         audio.onended = () => setIsPlaying(false);
@@ -40,14 +40,12 @@ export function VocabularyCard({ vocabulary, onToggleBookmark }: VocabularyCardP
       });
   };
 
-  const getCefrBadgeStyle = (level: string) => {
-    switch (level) {
-      case "A1": return "border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400";
-      case "A2": return "border-teal-500/20 bg-teal-500/10 text-teal-600 dark:text-teal-400";
-      case "B1": return "border-indigo-500/20 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400";
-      case "B2": return "border-purple-500/20 bg-purple-500/10 text-purple-600 dark:text-purple-400";
-      case "C1": return "border-pink-500/20 bg-pink-500/10 text-pink-600 dark:text-pink-400";
-      case "C2": return "border-rose-500/20 bg-rose-500/10 text-rose-600 dark:text-rose-400";
+  const getPartOfSpeechBadgeStyle = (part: string) => {
+    switch (part) {
+      case "noun": return "border-blue-500/20 bg-blue-500/10 text-blue-600 dark:text-blue-400";
+      case "verb": return "border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400";
+      case "adjective": return "border-purple-500/20 bg-purple-500/10 text-purple-600 dark:text-purple-400";
+      case "adverb": return "border-amber-500/20 bg-amber-500/10 text-amber-600 dark:text-amber-400";
       default: return "border-slate-500/20 bg-slate-500/10 text-slate-600 dark:text-slate-400";
     }
   };
@@ -61,13 +59,13 @@ export function VocabularyCard({ vocabulary, onToggleBookmark }: VocabularyCardP
               {vocabulary.word}
             </span>
             <span className="text-xs text-muted-foreground font-mono bg-muted/40 px-2 py-0.5 rounded">
-              {vocabulary.ipa}
+              /{vocabulary.phonetics}/
             </span>
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">
             {/* Audio Button */}
-            {vocabulary.audioUrl ? (
+            {vocabulary.mediaUrl ? (
               <Button
                 variant="ghost"
                 size="icon"
@@ -94,41 +92,45 @@ export function VocabularyCard({ vocabulary, onToggleBookmark }: VocabularyCardP
               variant="ghost"
               size="icon"
               onClick={() => onToggleBookmark(vocabulary.id)}
-              className={`h-8 w-8 rounded-xl transition-all duration-200 ${vocabulary.isBookmarked ? "bg-amber-500/10 text-amber-500 hover:bg-amber-500/20" : "text-muted-foreground hover:text-amber-500 hover:bg-amber-500/5"}`}
-              title={vocabulary.isBookmarked ? "Hủy lưu từ" : "Lưu vào sổ tay"}
+              className={`h-8 w-8 rounded-xl transition-all duration-200 ${vocabulary.isSaved ? "bg-amber-500/10 text-amber-500 hover:bg-amber-500/20" : "text-muted-foreground hover:text-amber-500 hover:bg-amber-500/5"}`}
+              title={vocabulary.isSaved ? "Hủy lưu từ" : "Lưu vào sổ tay"}
             >
-              <Bookmark className={`h-4 w-4 ${vocabulary.isBookmarked ? "fill-amber-500" : ""}`} />
+              <Bookmark className={`h-4 w-4 ${vocabulary.isSaved ? "fill-amber-500" : ""}`} />
             </Button>
           </div>
         </div>
 
         <div className="flex flex-wrap gap-1.5 items-center">
-          <Badge className={`font-mono font-black border text-[9px] px-2 py-0.5 rounded-full ${getCefrBadgeStyle(vocabulary.level)}`}>
-            {vocabulary.level}
-          </Badge>
-          <Badge variant="outline" className="text-[9px] font-black uppercase text-muted-foreground border-muted-foreground/20 rounded-full bg-muted/5">
+          <Badge className={`font-mono font-black border text-[9px] px-2 py-0.5 rounded-full uppercase ${getPartOfSpeechBadgeStyle(vocabulary.partOfSpeech)}`}>
             {vocabulary.partOfSpeech}
           </Badge>
-          <Badge variant="outline" className="text-[9px] font-medium text-indigo-500 border-indigo-500/20 rounded-full bg-indigo-500/5">
-            #{vocabulary.topic}
-          </Badge>
+          {vocabulary.isMastered && (
+            <Badge className="border-emerald-500/20 bg-emerald-500/10 text-emerald-600 text-[9px] font-bold rounded-full px-2 py-0.5">
+              ✓ Đã thuộc
+            </Badge>
+          )}
         </div>
       </CardHeader>
 
       <CardContent className="p-4 pt-2 flex flex-col justify-between flex-1 gap-3">
         <div className="space-y-1.5">
-          <p className="text-xs font-semibold text-foreground leading-relaxed">
-            {vocabulary.meaningVi}
+          <p className="text-xs font-bold text-foreground leading-relaxed">
+            {vocabulary.translation}
           </p>
+          {vocabulary.definition && (
+            <p className="text-[11px] text-muted-foreground leading-relaxed line-clamp-2">
+              {vocabulary.definition}
+            </p>
+          )}
         </div>
 
         {/* Examples Section */}
         <div className="pt-2 border-t border-border/40 bg-muted/5 rounded-xl p-2.5 space-y-1 text-[11px]">
           <p className="text-foreground font-medium italic leading-relaxed">
-            &ldquo;{vocabulary.exampleEn}&rdquo;
+            &ldquo;{vocabulary.example}&rdquo;
           </p>
           <p className="text-muted-foreground leading-relaxed">
-            {vocabulary.exampleVi}
+            {vocabulary.exampleTranslation}
           </p>
         </div>
       </CardContent>

@@ -155,30 +155,16 @@ export function AdminWritingBuilder({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1.5">
-              <Label className="font-bold uppercase text-muted-foreground">Giới hạn số từ (Word Limit)</Label>
-              <Input
-                type="number"
-                min="10"
-                value={wordLimit}
-                onChange={(e) => setWordLimit(e.target.value)}
-                placeholder="Để trống = không giới hạn"
-                className="text-xs focus:ring-amber-500/50"
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label className="font-bold uppercase text-muted-foreground">Trạng thái (Status)</Label>
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value as any)}
-                className="flex h-8 w-full border border-input bg-background px-2.5 py-1 text-xs text-foreground shadow-sm transition-colors outline-none focus-visible:border-amber-500/50 focus-visible:ring-1 focus-visible:ring-amber-500/50 disabled:opacity-50 dark:bg-input/30"
-              >
-                <option value="draft">DRAFT (Bản nháp)</option>
-                <option value="published">PUBLISHED (Xuất bản)</option>
-                <option value="archived">ARCHIVED (Lưu trữ)</option>
-              </select>
-            </div>
+          <div className="flex flex-col gap-1.5">
+            <Label className="font-bold uppercase text-muted-foreground">Giới hạn số từ (Word Limit)</Label>
+            <Input
+              type="number"
+              min="10"
+              value={wordLimit}
+              onChange={(e) => setWordLimit(e.target.value)}
+              placeholder="Để trống = không giới hạn"
+              className="text-xs focus:ring-amber-500/50"
+            />
           </div>
 
           <div className="flex flex-col gap-1.5">

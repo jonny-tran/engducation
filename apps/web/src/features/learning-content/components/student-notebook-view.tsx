@@ -25,8 +25,6 @@ export function StudentNotebookView() {
   const [currentPage, setCurrentPage] = useState(1);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [selectedLevel, setSelectedLevel] = useState<CefrLevel | "ALL">("ALL");
-  const [selectedTopic, setSelectedTopic] = useState("");
 
   // Fetch Bookmarked List of Vocabularies
   const { data, isLoading } = useQuery(
@@ -35,8 +33,6 @@ export function StudentNotebookView() {
         page: currentPage,
         pageSize: PAGE_SIZE,
         search: debouncedSearch || undefined,
-        level: selectedLevel === "ALL" ? undefined : selectedLevel,
-        topic: selectedTopic || undefined,
       },
       {
         enabled: !!session, // Execute query only if authenticated
@@ -45,16 +41,14 @@ export function StudentNotebookView() {
     )
   );
 
-  // Toggle Bookmark Mutation with Optimistic Hide & Sonner Undo action
-  const toggleBookmark = useMutation(
-    trpc.userVocabulary.toggleBookmark.mutationOptions({
+  // Toggle Save Mutation with Optimistic Hide & Sonner Undo action
+  const toggleSave = useMutation(
+    trpc.userVocabulary.toggleSave.mutationOptions({
       onMutate: async ({ vocabularyId }: { vocabularyId: string }) => {
         const filterKey = {
           page: currentPage,
           pageSize: PAGE_SIZE,
           search: debouncedSearch || undefined,
-          level: selectedLevel === "ALL" ? undefined : selectedLevel,
-          topic: selectedTopic || undefined,
         };
 
         const queryKey = trpc.userVocabulary.getPersonalNotebook.queryKey(filterKey);
@@ -91,18 +85,18 @@ export function StudentNotebookView() {
         }
       },
       onSuccess: (res: any, variables: any, context: any) => {
-        // If un-bookmarked successfully (bookmarked === false), show Toast with "Undo" button
-        if (!res.bookmarked && context?.removedItem) {
+        // If un-saved successfully (saved === false), show Toast with "Undo" button
+        if (!res.saved && context?.removedItem) {
           toast("Đã hủy lưu từ vựng khỏi sổ tay", {
             action: {
               label: "Hoàn tác",
               onClick: () => {
-                // Restore it by calling toggleBookmark again
-                toggleBookmark.mutate({ vocabularyId: variables.vocabularyId });
+                // Restore it by calling toggleSave again
+                toggleSave.mutate({ vocabularyId: variables.vocabularyId });
               },
             },
           });
-        } else if (res.bookmarked) {
+        } else if (res.saved) {
           toast.success("Đã hoàn tác và thêm lại từ vựng!");
         }
       },
@@ -124,7 +118,7 @@ export function StudentNotebookView() {
       router.push("/login");
       return;
     }
-    toggleBookmark.mutate({ vocabularyId: id });
+    toggleSave.mutate({ vocabularyId: id });
   };
 
   const handleSearchChange = (value: string) => {
@@ -137,8 +131,6 @@ export function StudentNotebookView() {
   const clearFilters = () => {
     setSearch("");
     setDebouncedSearch("");
-    setSelectedLevel("ALL");
-    setSelectedTopic("");
     setCurrentPage(1);
   };
 
@@ -163,13 +155,10 @@ export function StudentNotebookView() {
     return null;
   }
 
-  const hasFilters = !!search || selectedLevel !== "ALL" || !!selectedTopic;
+  const hasFilters = !!search;
   const items = data?.items ?? [];
   const pagination = data?.pagination;
   const totalPages = pagination?.totalPages ?? 1;
-
-  // Extract unique topics from the items to populate filters dynamically
-  const topics = Array.from(new Set(items.map((v) => v.topic))).sort();
 
   return (
     <div className="space-y-6">
@@ -198,42 +187,6 @@ export function StudentNotebookView() {
 
         {/* Filters pills and select dropdown */}
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-[10px] font-bold uppercase text-muted-foreground mr-1.5 flex items-center gap-1">
-              <Filter className="h-3 w-3" /> Cấp độ:
-            </span>
-            <Button
-              variant={selectedLevel === "ALL" ? "default" : "outline"}
-              onClick={() => { setSelectedLevel("ALL"); setCurrentPage(1); }}
-              className="h-7 text-[10px] font-bold px-3 rounded-full"
-            >
-              TẤT CẢ
-            </Button>
-            {CEFR_LEVELS.map((lvl) => (
-              <Button
-                key={lvl}
-                variant={selectedLevel === lvl ? "default" : "outline"}
-                onClick={() => { setSelectedLevel(lvl); setCurrentPage(1); }}
-                className="h-7 text-[10px] font-black px-3 rounded-full"
-              >
-                {lvl}
-              </Button>
-            ))}
-          </div>
-
-          {topics.length > 0 && (
-            <select
-              value={selectedTopic}
-              onChange={(e) => { setSelectedTopic(e.target.value); setCurrentPage(1); }}
-              className="flex h-7 border border-input bg-background px-2.5 py-1 text-[10px] font-bold text-foreground shadow-sm outline-none rounded-full"
-            >
-              <option value="">Tất cả chủ đề</option>
-              {topics.map((topic) => (
-                <option key={topic} value={topic}>#{topic}</option>
-              ))}
-            </select>
-          )}
-
           {hasFilters && (
             <Button variant="ghost" size="sm" onClick={clearFilters} className="h-7 text-[10px] font-bold gap-1 rounded-full text-muted-foreground hover:text-foreground">
               <X className="h-3 w-3" /> Xóa lọc
@@ -256,16 +209,16 @@ export function StudentNotebookView() {
           <p className="text-[11px] text-muted-foreground max-w-sm leading-relaxed">
             {hasFilters 
               ? "Không có từ vựng nào đã lưu đáp ứng bộ lọc của bạn."
-              : "Bạn chưa bookmark từ vựng nào. Hãy truy cập Từ điển hệ thống để bắt đầu tích lũy sổ tay học tập."}
+              : "Bạn chưa lưu từ vựng nào. Hãy truy cập học các khóa học để lưu lại từ vựng đã học."}
           </p>
           {hasFilters ? (
             <Button variant="outline" onClick={clearFilters} className="text-xs font-bold rounded-xl mt-2">
               Khôi phục bộ lọc
             </Button>
           ) : (
-            <Link href={"/vocabulary" as any}>
+            <Link href={"/courses" as any}>
               <Button className="text-xs font-bold rounded-xl mt-2 bg-primary hover:bg-primary/95 text-primary-foreground">
-                Đến từ điển hệ thống
+                Đến các khóa học
               </Button>
             </Link>
           )}
@@ -276,7 +229,7 @@ export function StudentNotebookView() {
             {items.map((vocab) => (
               <VocabularyCard
                 key={vocab.id}
-                vocabulary={{ ...vocab, isBookmarked: true }}
+                vocabulary={{ ...vocab, isSaved: true }}
                 onToggleBookmark={handleToggleBookmark}
               />
             ))}

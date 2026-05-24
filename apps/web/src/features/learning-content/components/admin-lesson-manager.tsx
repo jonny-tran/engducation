@@ -75,6 +75,7 @@ interface ModuleData {
 interface AdminLessonManagerProps {
   courseId: string;
   modules: ModuleData[];
+  onManageVocabulary?: (moduleId: string) => void;
 }
 
 type ActiveEditorState =
@@ -86,7 +87,7 @@ type ActiveEditorState =
   | { type: "new_writing"; moduleId: string }
   | { type: "edit_writing"; writing: PeerItem };
 
-export function AdminLessonManager({ courseId, modules }: AdminLessonManagerProps) {
+export function AdminLessonManager({ courseId, modules, onManageVocabulary }: AdminLessonManagerProps) {
   // Mutations hooks
   const { createLesson, updateLesson, deleteLesson, reorderContent } = useLessonMutations(courseId);
   const { createModule, updateModule, deleteModule } = useModuleMutations(courseId);
@@ -565,6 +566,14 @@ export function AdminLessonManager({ courseId, modules }: AdminLessonManagerProp
                         >
                           <Plus className="h-3 w-3 mr-1" /> + VIẾT LUẬN AI
                         </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => onManageVocabulary?.(mod.id)}
+                          className="h-7 text-[9px] font-bold border-purple-500/20 text-purple-600 hover:bg-purple-500/5"
+                        >
+                          <Plus className="h-3 w-3 mr-1" /> + TỪ VỰNG
+                        </Button>
                       </div>
                     </CardContent>
                   )}
@@ -706,18 +715,6 @@ export function AdminLessonManager({ courseId, modules }: AdminLessonManagerProp
                   </div>
                 )}
 
-                <div className="flex flex-col gap-1.5">
-                  <Label className="font-bold uppercase text-muted-foreground">Trạng thái phát hành</Label>
-                  <select
-                    value={lessonStatus}
-                    onChange={(e) => setLessonStatus(e.target.value as any)}
-                    className="flex h-8 w-full border border-input bg-background px-2.5 py-1 text-xs text-foreground shadow-sm transition-colors outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50 disabled:opacity-50 dark:bg-input/30"
-                  >
-                    <option value="draft">Bản nháp (DRAFT)</option>
-                    <option value="published">Công khai (PUBLISHED)</option>
-                    <option value="archived">Lưu trữ (ARCHIVED)</option>
-                  </select>
-                </div>
 
                 <div className="flex justify-end gap-2 pt-2">
                   <Button type="button" variant="outline" onClick={() => setActiveEditor({ type: "empty" })} className="font-bold">

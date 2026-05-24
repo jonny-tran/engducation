@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { trpc } from "@/utils/trpc";
 import { useVocabularyMutations } from "../hooks/use-vocabulary-mutations";
@@ -25,7 +25,6 @@ import { Search, Plus, X, Pencil, Trash2, Volume2, VolumeX, Loader2, Music } fro
 import { toast } from "sonner";
 import { z } from "zod";
 
-const LEVELS = ["A1", "A2", "B1", "B2", "C1", "C2"] as const;
 const PARTS_OF_SPEECH = [
   { value: "noun", label: "Danh từ (noun)" },
   { value: "verb", label: "Động từ (verb)" },
@@ -37,59 +36,58 @@ const PARTS_OF_SPEECH = [
   { value: "phrasal_verb", label: "Cụm động từ (phrasal verb)" },
 ] as const;
 
-type Level = "A1" | "A2" | "B1" | "B2" | "C1" | "C2";
 type PartOfSpeech = "noun" | "verb" | "adjective" | "adverb" | "preposition" | "conjunction" | "idiom" | "phrasal_verb";
 
 interface VocabularyFormData {
+  courseId: string;
+  moduleId: string;
   word: string;
-  ipa: string;
   partOfSpeech: PartOfSpeech;
-  meaningVi: string;
-  exampleEn: string;
-  exampleVi: string;
-  audioUrl: string;
-  level: Level;
-  topic: string;
+  phonetics: string;
+  definition: string;
+  translation: string;
+  example: string;
+  exampleTranslation: string;
+  mediaUrl: string;
 }
 
 interface VocabularyItem {
   id: string;
+  courseId: string;
+  moduleId: string | null;
   word: string;
-  ipa: string;
   partOfSpeech: string;
-  meaningVi: string;
-  exampleEn: string;
-  exampleVi: string;
-  audioUrl: string | null;
-  level: string;
-  topic: string;
+  phonetics: string;
+  definition: string;
+  translation: string;
+  example: string;
+  exampleTranslation: string;
+  mediaUrl: string | null;
+  status: string;
 }
 
 const PAGE_SIZE = 20;
 const DEFAULT_FORM: VocabularyFormData = {
+  courseId: "",
+  moduleId: "",
   word: "",
-  ipa: "",
   partOfSpeech: "noun",
-  meaningVi: "",
-  exampleEn: "",
-  exampleVi: "",
-  audioUrl: "",
-  level: "A1",
-  topic: "",
+  phonetics: "",
+  definition: "",
+  translation: "",
+  example: "",
+  exampleTranslation: "",
+  mediaUrl: "",
 };
 
 // Zod Schema matching backend validation rules and custom specs
 const vocabularyFormSchema = z.object({
+  courseId: z.string().min(1, "Vui lòng chọn khóa học"),
+  moduleId: z.string().optional().nullable().or(z.literal("")),
   word: z
     .string()
     .min(1, "Từ gốc không được để trống")
     .transform((val) => val.trim().toLowerCase()),
-  ipa: z
-    .string()
-    .min(1, "Phiên âm không được để trống")
-    .refine((val) => val.startsWith("/") && val.endsWith("/"), {
-      message: "Phiên âm phải bắt đầu và kết thúc bằng dấu gạch chéo /.../ (ví dụ: /ˈæp.əl/)",
-    }),
   partOfSpeech: z.enum([
     "noun",
     "verb",
@@ -100,35 +98,62 @@ const vocabularyFormSchema = z.object({
     "idiom",
     "phrasal_verb",
   ]),
-  meaningVi: z.string().min(1, "Nghĩa tiếng Việt không được để trống").transform((val) => val.trim()),
-  exampleEn: z.string().min(1, "Câu ví dụ tiếng Anh không được để trống").transform((val) => val.trim()),
-  exampleVi: z.string().min(1, "Bản dịch câu ví dụ không được để trống").transform((val) => val.trim()),
-  audioUrl: z
+  phonetics: z
     .string()
-    .url("URL âm thanh không hợp lệ")
+    .min(1, "Phiên âm không được để trống")
+    .refine((val) => val.startsWith("/") && val.endsWith("/"), {
+      message: "Phiên âm phải bắt đầu và kết thúc bằng dấu gạch chéo /.../ (ví dụ: /ˈæp.əl/)",
+    }),
+  definition: z.string().min(1, "Định nghĩa không được để trống").transform((val) => val.trim()),
+  translation: z.string().min(1, "Dịch nghĩa không được để trống").transform((val) => val.trim()),
+  example: z.string().min(1, "Câu ví dụ tiếng Anh không được để trống").transform((val) => val.trim()),
+  exampleTranslation: z.string().min(1, "Bản dịch câu ví dụ không được để trống").transform((val) => val.trim()),
+  mediaUrl: z
+    .string()
+    .url("URL âm thanh phát âm không hợp lệ")
     .optional()
     .or(z.literal(""))
     .transform((v) => (v === "" ? "" : v)),
-  level: z.enum(["A1", "A2", "B1", "B2", "C1", "C2"]),
-  topic: z
-    .string()
-    .min(1, "Chủ đề không được để trống")
-    .regex(/^[a-z0-9_]+$/, "Chủ đề phải viết thường snake_case (ví dụ: social_media)"),
 });
 
-export function AdminVocabularyManager() {
+export interface AdminVocabularyManagerProps {
+  courseId?: string;
+  moduleId?: string;
+  trigger?: number;
+}
+
+export function AdminVocabularyManager({ courseId, moduleId, trigger }: AdminVocabularyManagerProps = {}) {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [selectedLevel, setSelectedLevel] = useState("");
-  const [selectedTopic, setSelectedTopic] = useState("");
-  const [showForm, setShowForm] = useState(false);
+  const [selectedCourseId, setSelectedCourseId] = useState(courseId ?? "");
+  const [selectedModuleId, setSelectedModuleId] = useState(moduleId ?? "");
+  const [showForm, setShowForm] = useState(!!moduleId);
   const [editingItem, setEditingItem] = useState<VocabularyItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<VocabularyItem | null>(null);
-  const [formData, setFormData] = useState<VocabularyFormData>(DEFAULT_FORM);
+  const [formData, setFormData] = useState<VocabularyFormData>({
+    ...DEFAULT_FORM,
+    courseId: courseId ?? "",
+    moduleId: moduleId ?? "",
+  });
   const [errors, setErrors] = useState<Partial<Record<keyof VocabularyFormData, string>>>({});
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [previewPlayingId, setPreviewPlayingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (courseId) {
+      setSelectedCourseId(courseId);
+      setFormData((prev) => ({ ...prev, courseId }));
+    }
+  }, [courseId]);
+
+  useEffect(() => {
+    if (moduleId) {
+      setSelectedModuleId(moduleId);
+      setFormData((prev) => ({ ...prev, moduleId }));
+      setShowForm(true);
+    }
+  }, [moduleId, trigger]);
 
   const { create, update, remove } = useVocabularyMutations();
   const { upload } = useCloudinaryUpload({
@@ -136,13 +161,30 @@ export function AdminVocabularyManager() {
     folder: "engducation/vocabularies/audio",
   });
 
+  // Fetch list of courses for select dropdown
+  const { data: coursesData } = useQuery(
+    trpc.admin.courseList.queryOptions({ pageSize: 100 })
+  );
+  const courses = coursesData?.items ?? [];
+
+  // Fetch course detail for selected course to get modules list
+  const activeCourseId = formData.courseId || selectedCourseId;
+  const { data: courseDetail } = useQuery(
+    trpc.admin.courseGetDetail.queryOptions(
+      { courseId: activeCourseId },
+      { enabled: !!activeCourseId }
+    )
+  );
+  const modules = courseDetail?.modules ?? [];
+
+  // Fetch vocabularies list
   const { data, isLoading } = useQuery(
     trpc.adminVocabulary.list.queryOptions({
       page,
       pageSize: PAGE_SIZE,
       search: debouncedSearch || undefined,
-      level: (selectedLevel || undefined) as Level | undefined,
-      topic: selectedTopic || undefined,
+      courseId: selectedCourseId || undefined,
+      moduleId: selectedModuleId || undefined,
     })
   );
 
@@ -167,9 +209,9 @@ export function AdminVocabularyManager() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Check size limit: 500KB
-    if (file.size > 500 * 1024) {
-      toast.error("Dung lượng file phát âm phải nhỏ hơn 500KB");
+    // Check size limit: 1MB
+    if (file.size > 1024 * 1024) {
+      toast.error("Dung lượng file phát âm phải nhỏ hơn 1MB");
       return;
     }
 
@@ -190,7 +232,7 @@ export function AdminVocabularyManager() {
         },
       });
 
-      updateField("audioUrl", res.secureUrl);
+      updateField("mediaUrl", res.secureUrl);
       toast.success("Tải file âm thanh phát âm lên thành công!");
     } catch (err: any) {
       toast.error(err.message || "Tải âm thanh lên thất bại");
@@ -221,15 +263,16 @@ export function AdminVocabularyManager() {
     }
 
     const payload = {
+      courseId: formData.courseId,
+      moduleId: formData.moduleId || null,
       word: formData.word.trim().toLowerCase(),
-      ipa: formData.ipa.trim(),
       partOfSpeech: formData.partOfSpeech,
-      meaningVi: formData.meaningVi.trim(),
-      exampleEn: formData.exampleEn.trim(),
-      exampleVi: formData.exampleVi.trim(),
-      audioUrl: formData.audioUrl.trim() || undefined,
-      level: formData.level,
-      topic: formData.topic.trim(),
+      phonetics: formData.phonetics.trim(),
+      definition: formData.definition.trim(),
+      translation: formData.translation.trim(),
+      example: formData.example.trim(),
+      exampleTranslation: formData.exampleTranslation.trim(),
+      mediaUrl: formData.mediaUrl.trim() || undefined,
     };
 
     try {
@@ -245,7 +288,11 @@ export function AdminVocabularyManager() {
   };
 
   const resetForm = () => {
-    setFormData(DEFAULT_FORM);
+    setFormData({
+      ...DEFAULT_FORM,
+      courseId: courseId ?? selectedCourseId, // Giữ lại khóa học đang lọc cho tiện
+      moduleId: selectedModuleId,
+    });
     setErrors({});
     setShowForm(false);
     setEditingItem(null);
@@ -254,15 +301,16 @@ export function AdminVocabularyManager() {
   const handleEdit = (item: VocabularyItem) => {
     setEditingItem(item);
     setFormData({
+      courseId: item.courseId,
+      moduleId: item.moduleId ?? "",
       word: item.word,
-      ipa: item.ipa,
       partOfSpeech: item.partOfSpeech as PartOfSpeech,
-      meaningVi: item.meaningVi,
-      exampleEn: item.exampleEn,
-      exampleVi: item.exampleVi,
-      audioUrl: item.audioUrl ?? "",
-      level: item.level as Level,
-      topic: item.topic,
+      phonetics: item.phonetics,
+      definition: item.definition,
+      translation: item.translation,
+      example: item.example,
+      exampleTranslation: item.exampleTranslation,
+      mediaUrl: item.mediaUrl ?? "",
     });
     setErrors({});
     setShowForm(true);
@@ -284,30 +332,17 @@ export function AdminVocabularyManager() {
   const clearFilters = () => {
     setSearch("");
     setDebouncedSearch("");
-    setSelectedLevel("");
-    setSelectedTopic("");
+    setSelectedCourseId("");
+    setSelectedModuleId("");
     setPage(1);
   };
 
-  const hasFilters = !!search || !!selectedLevel || !!selectedTopic;
-  const topics = Array.from(new Set((data?.items ?? []).map((v) => v.topic))).sort();
+  const hasFilters = !!search || !!selectedCourseId || !!selectedModuleId;
   const isPending = create.isPending || update.isPending;
 
   const updateField = <K extends keyof VocabularyFormData>(key: K, value: VocabularyFormData[K]) => {
     setFormData((prev) => ({ ...prev, [key]: value }));
     if (errors[key]) setErrors((prev) => ({ ...prev, [key]: "" }));
-  };
-
-  const getCefrBadgeStyle = (level: string) => {
-    switch (level) {
-      case "A1": return "border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400";
-      case "A2": return "border-teal-500/20 bg-teal-500/10 text-teal-600 dark:text-teal-400";
-      case "B1": return "border-indigo-500/20 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400";
-      case "B2": return "border-purple-500/20 bg-purple-500/10 text-purple-600 dark:text-purple-400";
-      case "C1": return "border-pink-500/20 bg-pink-500/10 text-pink-600 dark:text-pink-400";
-      case "C2": return "border-rose-500/20 bg-rose-500/10 text-rose-600 dark:text-rose-400";
-      default: return "border-slate-500/20 bg-slate-500/10 text-slate-600 dark:text-slate-400";
-    }
   };
 
   return (
@@ -326,23 +361,27 @@ export function AdminVocabularyManager() {
               />
             </div>
 
-            <select
-              value={selectedLevel}
-              onChange={(e) => { setSelectedLevel(e.target.value); setPage(1); }}
-              className="flex h-8 border border-input bg-background px-2.5 py-1 text-xs text-foreground shadow-sm outline-none focus-visible:ring-1"
-            >
-              <option value="">Cấp độ</option>
-              {LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
-            </select>
-
-            {topics.length > 0 && (
+            {/* Course Filter */}
+            {!courseId && (
               <select
-                value={selectedTopic}
-                onChange={(e) => { setSelectedTopic(e.target.value); setPage(1); }}
+                value={selectedCourseId}
+                onChange={(e) => { setSelectedCourseId(e.target.value); setSelectedModuleId(""); setPage(1); }}
                 className="flex h-8 border border-input bg-background px-2.5 py-1 text-xs text-foreground shadow-sm outline-none focus-visible:ring-1"
               >
-                <option value="">Chủ đề</option>
-                {topics.map((t) => <option key={t} value={t}>{t}</option>)}
+                <option value="">Tất cả Khóa học</option>
+                {courses.map((c) => <option key={c.id} value={c.id}>{c.title}</option>)}
+              </select>
+            )}
+
+            {/* Module Filter */}
+            {selectedCourseId && (
+              <select
+                value={selectedModuleId}
+                onChange={(e) => { setSelectedModuleId(e.target.value); setPage(1); }}
+                className="flex h-8 border border-input bg-background px-2.5 py-1 text-xs text-foreground shadow-sm outline-none focus-visible:ring-1"
+              >
+                <option value="">Tất cả Module</option>
+                {modules.map((m) => <option key={m.id} value={m.id}>{m.title}</option>)}
               </select>
             )}
 
@@ -380,6 +419,40 @@ export function AdminVocabularyManager() {
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-3 text-xs">
+                {/* Course Selection in Form */}
+                {!courseId && (
+                  <div className="flex flex-col gap-1">
+                    <Label className="text-[10px] font-bold uppercase text-muted-foreground">Thuộc Khóa học *</Label>
+                    <select
+                      value={formData.courseId}
+                      onChange={(e) => {
+                        updateField("courseId", e.target.value);
+                        updateField("moduleId", "");
+                      }}
+                      className="h-8 border border-input bg-background px-2 text-xs shadow-sm outline-none"
+                    >
+                      <option value="">-- Chọn khóa học --</option>
+                      {courses.map((c) => <option key={c.id} value={c.id}>{c.title}</option>)}
+                    </select>
+                    {errors.courseId && <p className="text-[10px] text-destructive">{errors.courseId}</p>}
+                  </div>
+                )}
+
+                {/* Module Selection in Form */}
+                {formData.courseId && modules.length > 0 && (
+                  <div className="flex flex-col gap-1">
+                    <Label className="text-[10px] font-bold uppercase text-muted-foreground">Thuộc Module (Không bắt buộc)</Label>
+                    <select
+                      value={formData.moduleId}
+                      onChange={(e) => updateField("moduleId", e.target.value)}
+                      className="h-8 border border-input bg-background px-2 text-xs shadow-sm outline-none"
+                    >
+                      <option value="">-- Không thuộc module nào --</option>
+                      {modules.map((m) => <option key={m.id} value={m.id}>{m.title}</option>)}
+                    </select>
+                  </div>
+                )}
+
                 {/* Word */}
                 <div className="flex flex-col gap-1">
                   <Label className="text-[10px] font-bold uppercase text-muted-foreground">Từ gốc *</Label>
@@ -392,93 +465,81 @@ export function AdminVocabularyManager() {
                   {errors.word && <p className="text-[10px] text-destructive">{errors.word}</p>}
                 </div>
 
-                {/* IPA */}
+                {/* Phonetics */}
                 <div className="flex flex-col gap-1">
-                  <Label className="text-[10px] font-bold uppercase text-muted-foreground">Phiên âm *</Label>
+                  <Label className="text-[10px] font-bold uppercase text-muted-foreground">Phiên âm (Phonetics) *</Label>
                   <Input
-                    value={formData.ipa}
-                    onChange={(e) => updateField("ipa", e.target.value)}
+                    value={formData.phonetics}
+                    onChange={(e) => updateField("phonetics", e.target.value)}
                     placeholder="ví dụ: /ˈæp.əl/ hoặc /ɪˈfem.ər.əl/"
                     className="h-8 text-xs"
                   />
-                  {errors.ipa && <p className="text-[10px] text-destructive">{errors.ipa}</p>}
+                  {errors.phonetics && <p className="text-[10px] text-destructive">{errors.phonetics}</p>}
                 </div>
 
-                {/* Level & Part of Speech */}
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="flex flex-col gap-1">
-                    <Label className="text-[10px] font-bold uppercase text-muted-foreground">Cấp độ</Label>
-                    <select
-                      value={formData.level}
-                      onChange={(e) => updateField("level", e.target.value as Level)}
-                      className="h-8 border border-input bg-background px-2 text-xs shadow-sm outline-none"
-                    >
-                      {LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
-                    </select>
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <Label className="text-[10px] font-bold uppercase text-muted-foreground">Từ loại</Label>
-                    <select
-                      value={formData.partOfSpeech}
-                      onChange={(e) => updateField("partOfSpeech", e.target.value as PartOfSpeech)}
-                      className="h-8 border border-input bg-background px-2 text-xs shadow-sm outline-none"
-                    >
-                      {PARTS_OF_SPEECH.map((p) => (
-                        <option key={p.value} value={p.value}>{p.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                {/* Topic */}
+                {/* Part of Speech */}
                 <div className="flex flex-col gap-1">
-                  <Label className="text-[10px] font-bold uppercase text-muted-foreground">Chủ đề * (snake_case)</Label>
+                  <Label className="text-[10px] font-bold uppercase text-muted-foreground">Từ loại</Label>
+                  <select
+                    value={formData.partOfSpeech}
+                    onChange={(e) => updateField("partOfSpeech", e.target.value as PartOfSpeech)}
+                    className="h-8 border border-input bg-background px-2 text-xs shadow-sm outline-none"
+                  >
+                    {PARTS_OF_SPEECH.map((p) => (
+                      <option key={p.value} value={p.value}>{p.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Definition */}
+                <div className="flex flex-col gap-1">
+                  <Label className="text-[10px] font-bold uppercase text-muted-foreground">Định nghĩa *</Label>
                   <Input
-                    value={formData.topic}
-                    onChange={(e) => updateField("topic", e.target.value)}
-                    placeholder="ví dụ: social_media"
+                    value={formData.definition}
+                    onChange={(e) => updateField("definition", e.target.value)}
+                    placeholder="ví dụ: Lasting for a very short time"
                     className="h-8 text-xs"
                   />
-                  {errors.topic && <p className="text-[10px] text-destructive">{errors.topic}</p>}
+                  {errors.definition && <p className="text-[10px] text-destructive">{errors.definition}</p>}
                 </div>
 
-                {/* Meaning */}
+                {/* Translation */}
                 <div className="flex flex-col gap-1">
-                  <Label className="text-[10px] font-bold uppercase text-muted-foreground">Nghĩa tiếng Việt *</Label>
+                  <Label className="text-[10px] font-bold uppercase text-muted-foreground">Dịch nghĩa tiếng Việt *</Label>
                   <Input
-                    value={formData.meaningVi}
-                    onChange={(e) => updateField("meaningVi", e.target.value)}
+                    value={formData.translation}
+                    onChange={(e) => updateField("translation", e.target.value)}
                     placeholder="ví dụ: nhất thời, phù du"
                     className="h-8 text-xs"
                   />
-                  {errors.meaningVi && <p className="text-[10px] text-destructive">{errors.meaningVi}</p>}
+                  {errors.translation && <p className="text-[10px] text-destructive">{errors.translation}</p>}
                 </div>
 
-                {/* Example EN */}
+                {/* Example */}
                 <div className="flex flex-col gap-1">
                   <Label className="text-[10px] font-bold uppercase text-muted-foreground">Câu ví dụ (EN) *</Label>
                   <Input
-                    value={formData.exampleEn}
-                    onChange={(e) => updateField("exampleEn", e.target.value)}
+                    value={formData.example}
+                    onChange={(e) => updateField("example", e.target.value)}
                     placeholder="ví dụ: Fame in the digital age is often ephemeral."
                     className="h-8 text-xs"
                   />
-                  {errors.exampleEn && <p className="text-[10px] text-destructive">{errors.exampleEn}</p>}
+                  {errors.example && <p className="text-[10px] text-destructive">{errors.example}</p>}
                 </div>
 
-                {/* Example VI */}
+                {/* Example Translation */}
                 <div className="flex flex-col gap-1">
-                  <Label className="text-[10px] font-bold uppercase text-muted-foreground">Bản dịch (VI) *</Label>
+                  <Label className="text-[10px] font-bold uppercase text-muted-foreground">Dịch câu ví dụ (VI) *</Label>
                   <Input
-                    value={formData.exampleVi}
-                    onChange={(e) => updateField("exampleVi", e.target.value)}
+                    value={formData.exampleTranslation}
+                    onChange={(e) => updateField("exampleTranslation", e.target.value)}
                     placeholder="ví dụ: Danh tiếng trong thời đại số thường chỉ là nhất thời."
                     className="h-8 text-xs"
                   />
-                  {errors.exampleVi && <p className="text-[10px] text-destructive">{errors.exampleVi}</p>}
+                  {errors.exampleTranslation && <p className="text-[10px] text-destructive">{errors.exampleTranslation}</p>}
                 </div>
 
-                {/* Audio Upload Flow */}
+                {/* Audio/Media Upload Flow */}
                 <div className="flex flex-col gap-1.5 border border-dashed border-border/80 rounded-xl p-3 bg-muted/5">
                   <Label className="text-[10px] font-bold uppercase text-muted-foreground flex items-center gap-1">
                     <Music className="h-3 w-3 text-indigo-500" /> File phát âm âm thanh (.mp3, .wav)
@@ -506,28 +567,28 @@ export function AdminVocabularyManager() {
 
                   {/* Manual URL link input as backup */}
                   <div className="mt-2 space-y-1.5">
-                    <Label className="text-[9px] font-bold text-muted-foreground">Hoặc dán URL âm thanh trực tiếp</Label>
+                    <Label className="text-[9px] font-bold text-muted-foreground">Hoặc dán URL âm thanh/hình ảnh</Label>
                     <div className="flex gap-1.5">
                       <Input
-                        value={formData.audioUrl}
-                        onChange={(e) => updateField("audioUrl", e.target.value)}
+                        value={formData.mediaUrl}
+                        onChange={(e) => updateField("mediaUrl", e.target.value)}
                         placeholder="https://..."
                         type="url"
                         className="h-8 text-xs flex-1"
                       />
-                      {formData.audioUrl && (
+                      {formData.mediaUrl && (
                         <Button
                           type="button"
                           variant="outline"
                           size="icon"
-                          onClick={() => playPreviewAudio(formData.audioUrl, "form-preview")}
+                          onClick={() => playPreviewAudio(formData.mediaUrl, "form-preview")}
                           className={`h-8 w-8 rounded-xl shrink-0 ${previewPlayingId === "form-preview" ? "text-primary bg-primary/10 animate-pulse border-primary/20" : ""}`}
                         >
                           <Volume2 className="h-3.5 w-3.5" />
                         </Button>
                       )}
                     </div>
-                    {errors.audioUrl && <p className="text-[10px] text-destructive">{errors.audioUrl}</p>}
+                    {errors.mediaUrl && <p className="text-[10px] text-destructive">{errors.mediaUrl}</p>}
                   </div>
                 </div>
 
@@ -547,7 +608,7 @@ export function AdminVocabularyManager() {
         )}
 
         {/* Vocabulary List */}
-        <div className={showForm ? "lg:col-span-2" : "col-span-1"}>
+        <div className={showForm ? "lg:col-span-2" : "col-span-1 lg:col-span-3"}>
           <Card className="border border-border bg-card shadow-sm">
             <CardContent className="p-0">
               {isLoading ? (
@@ -566,35 +627,42 @@ export function AdminVocabularyManager() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-extrabold text-sm text-foreground">{item.word}</span>
-                            <span className="text-[11px] text-muted-foreground font-mono bg-muted/30 px-1.5 py-0.5 rounded">{item.ipa}</span>
-                            <Badge className={`text-[9px] font-black border uppercase px-2 py-0.5 rounded-full ${getCefrBadgeStyle(item.level)}`}>
-                              {item.level}
-                            </Badge>
+                            <span className="text-[11px] text-muted-foreground font-mono bg-muted/30 px-1.5 py-0.5 rounded">{item.phonetics}</span>
                             <Badge variant="outline" className="text-[9px] font-black uppercase text-muted-foreground">
                               {item.partOfSpeech}
                             </Badge>
+                            <Badge variant="outline" className={`text-[9px] font-bold uppercase ${
+                              item.status === "published"
+                                ? "border-emerald-500/20 text-emerald-600"
+                                : "border-amber-500/20 text-amber-600"
+                            }`}>
+                              {item.status.toUpperCase()}
+                            </Badge>
                           </div>
-                          <div className="text-xs text-foreground font-semibold mt-1.5">{item.meaningVi}</div>
-
-                          <div className="mt-1 bg-muted/5 rounded-lg p-2 border border-border/40 text-[10px] space-y-0.5 max-w-xl">
-                            <div className="text-foreground italic font-medium">&ldquo;{item.exampleEn}&rdquo;</div>
-                            <div className="text-muted-foreground">{item.exampleVi}</div>
+                          <div className="text-xs text-foreground font-semibold mt-1">
+                            {item.translation}
+                          </div>
+                          <div className="text-[11px] text-muted-foreground mt-0.5">
+                            Định nghĩa: {item.definition}
                           </div>
 
-                          <div className="text-[9px] text-indigo-500 font-bold mt-1.5 flex items-center gap-1">
-                            <span>Chủ đề:</span>
-                            <span className="bg-indigo-500/5 border border-indigo-500/10 rounded px-1.5 py-0.2 text-[9px]">
-                              #{item.topic}
-                            </span>
+                          <div className="mt-2 bg-muted/5 rounded-lg p-2 border border-border/40 text-[10px] space-y-0.5 max-w-xl">
+                            <div className="text-foreground italic font-medium">&ldquo;{item.example}&rdquo;</div>
+                            <div className="text-muted-foreground">{item.exampleTranslation}</div>
+                          </div>
+
+                          <div className="text-[9px] text-indigo-500 font-bold mt-2 flex items-center gap-1.5 flex-wrap">
+                            <span>Khóa học ID: {item.courseId}</span>
+                            {item.moduleId && <span>· Module ID: {item.moduleId}</span>}
                           </div>
                         </div>
 
                         <div className="flex items-center gap-1 shrink-0">
-                          {item.audioUrl ? (
+                          {item.mediaUrl ? (
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => playPreviewAudio(item.audioUrl!, item.id)}
+                              onClick={() => playPreviewAudio(item.mediaUrl!, item.id)}
                               className={`h-7 w-7 p-0 rounded-xl text-muted-foreground hover:text-primary ${previewPlayingId === item.id ? "text-primary bg-primary/10 animate-pulse" : ""}`}
                               title="Nghe thử"
                             >
@@ -606,7 +674,7 @@ export function AdminVocabularyManager() {
                               size="sm"
                               disabled
                               className="h-7 w-7 p-0 rounded-xl text-muted-foreground/20 cursor-not-allowed"
-                              title="Không có âm thanh"
+                              title="Không có âm thanh/hình ảnh"
                             >
                               <VolumeX className="h-4 w-4" />
                             </Button>

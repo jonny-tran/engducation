@@ -15,6 +15,7 @@ import {
   answers,
   userProgress,
   quizAttempts,
+  userEnrollments,
 } from "@engducation/db/schema";
 
 // ==========================================
@@ -51,7 +52,7 @@ export const userContentRouter = router({
       const whereClause =
         filters.length > 1 ? and(...filters) : filters[0];
 
-      const [rows, countResult] = await Promise.all([
+      const [rows, countResult, enrollments] = await Promise.all([
         ctx.db.query.courses.findMany({
           where: whereClause,
           orderBy: [asc(courses.createdAt)],
@@ -72,7 +73,13 @@ export const userContentRouter = router({
           .from(courses)
           .where(whereClause)
           .limit(1),
+        ctx.db
+          .select({ courseId: userEnrollments.courseId })
+          .from(userEnrollments)
+          .where(eq(userEnrollments.userId, userId)),
       ]);
+
+      const enrolledCourseIds = new Set(enrollments.map((e) => e.courseId));
 
       const progressRows = await ctx.db
         .select({
@@ -111,6 +118,7 @@ export const userContentRouter = router({
           ...course,
           totalItems,
           completedItems,
+          isEnrolled: enrolledCourseIds.has(course.id),
           // maintain compatibility fields
           totalLessons: totalItems,
           completedLessons: completedItems,
@@ -170,6 +178,21 @@ export const userContentRouter = router({
         });
       }
 
+      // Check enrollment
+      const enrollment = await ctx.db.query.userEnrollments.findFirst({
+        where: and(
+          eq(userEnrollments.userId, userId),
+          eq(userEnrollments.courseId, courseId)
+        ),
+      });
+
+      if (!enrollment) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Bạn phải đăng ký khóa học này để truy cập nội dung học tập.",
+        });
+      }
+
       const progressRows = await ctx.db.query.userProgress.findMany({
         where: (tbl, { eq: dbEq }) => dbEq(tbl.userId, userId),
       });
@@ -212,6 +235,56 @@ export const userContentRouter = router({
       };
     }),
 
+  courseEnroll: protectedProcedure
+    .input(z.object({ courseId: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      const { courseId } = input;
+
+      const course = await ctx.db.query.courses.findFirst({
+        where: eq(courses.id, courseId),
+      });
+
+      if (!course) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Khóa học không tồn tại",
+        });
+      }
+
+      if (course.status !== "published") {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Khóa học này chưa được xuất bản",
+        });
+      }
+
+      const existing = await ctx.db.query.userEnrollments.findFirst({
+        where: and(
+          eq(userEnrollments.userId, userId),
+          eq(userEnrollments.courseId, courseId)
+        ),
+      });
+
+      if (existing) {
+        return { enrolled: true };
+      }
+
+      if (course.price > 0) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Khóa học này có phí. Vui lòng thanh toán trước khi đăng ký.",
+        });
+      }
+
+      await ctx.db.insert(userEnrollments).values({
+        userId,
+        courseId,
+      });
+
+      return { enrolled: true };
+    }),
+
   // ─── LESSONS ─────────────────────────────────────────────
 
   lessonGetDetail: protectedProcedure
@@ -243,6 +316,21 @@ export const userContentRouter = router({
         });
       }
 
+      // Check enrollment
+      const enrollment = await ctx.db.query.userEnrollments.findFirst({
+        where: and(
+          eq(userEnrollments.userId, ctx.session.user.id),
+          eq(userEnrollments.courseId, lesson.module.course.id)
+        ),
+      });
+
+      if (!enrollment) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Bạn phải đăng ký khóa học này để truy cập nội dung học tập.",
+        });
+      }
+
       return lesson;
     }),
 
@@ -251,12 +339,32 @@ export const userContentRouter = router({
     .mutation(async ({ ctx, input }) => {
       const lesson = await ctx.db.query.lessons.findFirst({
         where: eq(lessons.id, input.lessonId),
+        with: {
+          module: {
+            with: { course: true }
+          },
+        },
       });
 
       if (!lesson) {
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "Bài học không tồn tại",
+        });
+      }
+
+      // Check enrollment
+      const enrollment = await ctx.db.query.userEnrollments.findFirst({
+        where: and(
+          eq(userEnrollments.userId, ctx.session.user.id),
+          eq(userEnrollments.courseId, lesson.module.course.id)
+        ),
+      });
+
+      if (!enrollment) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Bạn phải đăng ký khóa học này để truy cập nội dung học tập.",
         });
       }
 
@@ -401,6 +509,21 @@ export const userContentRouter = router({
         });
       }
 
+      // Check enrollment
+      const enrollment = await ctx.db.query.userEnrollments.findFirst({
+        where: and(
+          eq(userEnrollments.userId, ctx.session.user.id),
+          eq(userEnrollments.courseId, quiz.module.course.id)
+        ),
+      });
+
+      if (!enrollment) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Bạn phải đăng ký khóa học này để truy cập nội dung học tập.",
+        });
+      }
+
       // ── ANTI-CHEAT: never send isCorrect or explanation to the client ──
       return {
         id: quiz.id,
@@ -461,6 +584,21 @@ export const userContentRouter = router({
         throw new TRPCError({
           code: "FORBIDDEN",
           message: "Bài tập này chưa được xuất bản",
+        });
+      }
+
+      // Check enrollment
+      const enrollment = await ctx.db.query.userEnrollments.findFirst({
+        where: and(
+          eq(userEnrollments.userId, userId),
+          eq(userEnrollments.courseId, quiz.module.course.id)
+        ),
+      });
+
+      if (!enrollment) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Bạn phải đăng ký khóa học này để truy cập nội dung học tập.",
         });
       }
 
@@ -667,6 +805,21 @@ export const userContentRouter = router({
         });
       }
 
+      // Check enrollment
+      const enrollment = await ctx.db.query.userEnrollments.findFirst({
+        where: and(
+          eq(userEnrollments.userId, ctx.session.user.id),
+          eq(userEnrollments.courseId, assignment.module.course.id)
+        ),
+      });
+
+      if (!enrollment) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Bạn phải đăng ký khóa học này để truy cập nội dung học tập.",
+        });
+      }
+
       return assignment;
     }),
 
@@ -697,6 +850,21 @@ export const userContentRouter = router({
         throw new TRPCError({
           code: "FORBIDDEN",
           message: "Bài tập viết luận này chưa được xuất bản",
+        });
+      }
+
+      // Check enrollment
+      const enrollment = await ctx.db.query.userEnrollments.findFirst({
+        where: and(
+          eq(userEnrollments.userId, userId),
+          eq(userEnrollments.courseId, assignment.module.course.id)
+        ),
+      });
+
+      if (!enrollment) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Bạn phải đăng ký khóa học này để truy cập nội dung học tập.",
         });
       }
 

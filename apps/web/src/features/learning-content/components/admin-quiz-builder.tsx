@@ -395,33 +395,17 @@ export function AdminQuizBuilder({ courseId, moduleId, quiz, onFinished }: Admin
 
       <CardContent className="p-4">
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Quiz Title & Status */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div className="md:col-span-2 flex flex-col gap-1.5">
-              <Label className="text-xs font-bold uppercase text-muted-foreground">
-                Tiêu đề bài tập *
-              </Label>
-              <Input
-                value={quizTitle}
-                onChange={(e) => setQuizTitle(e.target.value)}
-                placeholder="Ví dụ: Quiz: Grammar checkpoint 1"
-                className="text-xs focus:ring-emerald-500/50"
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-xs font-bold uppercase text-muted-foreground">
-                Trạng thái (Status)
-              </Label>
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value as any)}
-                className="flex h-8 w-full border border-input bg-background px-2.5 py-1 text-xs text-foreground shadow-sm transition-colors outline-none focus-visible:border-emerald-500/50 focus-visible:ring-1 focus-visible:ring-emerald-500/50 disabled:opacity-50 dark:bg-input/30"
-              >
-                <option value="draft">DRAFT (Bản nháp)</option>
-                <option value="published">PUBLISHED (Xuất bản)</option>
-                <option value="archived">ARCHIVED (Lưu trữ)</option>
-              </select>
-            </div>
+          {/* Quiz Title */}
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs font-bold uppercase text-muted-foreground">
+              Tiêu đề bài tập *
+            </Label>
+            <Input
+              value={quizTitle}
+              onChange={(e) => setQuizTitle(e.target.value)}
+              placeholder="Ví dụ: Quiz: Grammar checkpoint 1"
+              className="text-xs focus:ring-emerald-500/50"
+            />
           </div>
 
           {/* Dynamic Questions */}

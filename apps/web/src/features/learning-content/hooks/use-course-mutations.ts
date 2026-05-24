@@ -63,9 +63,24 @@ export function useCourseMutations() {
     })
   );
 
+  const publishCourse = useMutation(
+    trpc.admin.coursePublish.mutationOptions({
+      onSuccess: () => {
+        toast.success("Xuất bản khóa học và đồng bộ tất cả bài học thành công");
+        queryClient.invalidateQueries({
+          queryKey: trpc.admin.courseList.queryKey(),
+        });
+      },
+      onError: (err) => {
+        toast.error(err.message);
+      },
+    })
+  );
+
   return {
     createCourse,
     updateCourse,
     deleteCourse,
+    publishCourse,
   };
 }
