@@ -57,5 +57,18 @@ export function useVocabularyMutations() {
     })
   );
 
-  return { create, update, remove };
+  const importFromExcel = useMutation(
+    trpc.adminVocabulary.importFromExcel.mutationOptions({
+      onSuccess: (res) => {
+        toast.success(res.message);
+        invalidateVocabulary();
+      },
+      onError: (err) => {
+        toast.error(err.message);
+      },
+    })
+  );
+
+  return { create, update, remove, importFromExcel };
 }
+

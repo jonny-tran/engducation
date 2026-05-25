@@ -142,6 +142,23 @@ const addQuestionSchema = z.object({
     .min(2, "Mỗi câu hỏi cần ít nhất 2 đáp án"),
 });
 
+const importQuizSchema = z.object({
+  moduleId: z.string().min(1, "Module ID không được để trống"),
+  title: z.string().min(1, "Tiêu đề bài tập không được để trống"),
+  questions: z.array(
+    z.object({
+      content: z.string().min(1, "Nội dung câu hỏi không được để trống"),
+      explanation: z.string().optional().nullable(),
+      order: z.number().int().min(1),
+      answers: z.array(
+        z.object({
+          content: z.string().min(1, "Nội dung đáp án không được để trống"),
+          isCorrect: z.boolean(),
+        })
+      ).min(2, "Mỗi câu hỏi cần tối thiểu 2 đáp án"),
+    })
+  ).min(1, "Bài tập phải có ít nhất 1 câu hỏi"),
+});
 
 // ==========================================
 // ROUTER
@@ -1045,6 +1062,98 @@ export const adminContentRouter = router({
       totalProgressLogs: Number(userCount[0]?.count ?? 0),
     };
   }),
+
+  // ─── QUIZ IMPORT FROM EXCEL ───────────────────────────────
+
+  quizImportFromExcel: adminProcedure
+    .input(importQuizSchema)
+    .mutation(async ({ ctx, input }) => {
+      const { moduleId, title, questions: questionsInput } = input;
+      const now = new Date();
+
+      // Validation check: each question must have exactly one correct answer
+      for (const q of questionsInput) {
+        const correctCount = q.answers.filter((a) => a.isCorrect).length;
+        if (correctCount !== 1) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `Câu hỏi bài tập: "${q.content.slice(0, 30)}..." phải có duy nhất 1 đáp án đúng (hiện tại có ${correctCount} đáp án đúng).`,
+          });
+        }
+      }
+
+      const existingModule = await ctx.db.query.modules.findFirst({
+        where: eq(modules.id, moduleId),
+      });
+      if (!existingModule) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Module học chỉ định không tồn tại",
+        });
+      }
+
+      let targetQuizId: string;
+
+      await ctx.db.transaction(async (tx) => {
+        // Check if quiz already exists for this module
+        const existingQuiz = await tx.query.quizzes.findFirst({
+          where: eq(quizzes.moduleId, moduleId),
+        });
+
+        if (existingQuiz) {
+          targetQuizId = existingQuiz.id;
+          // Update title
+          await tx
+            .update(quizzes)
+            .set({ title, updatedAt: now })
+            .where(eq(quizzes.id, targetQuizId));
+
+          // Clean questions (answers cascade automatically by onDelete cascade constraint!)
+          await tx.delete(questions).where(eq(questions.quizId, targetQuizId));
+        } else {
+          // Create new quiz
+          targetQuizId = crypto.randomUUID();
+          const currentMaxOrder = await getMaxOrderInModule(tx, moduleId);
+
+          await tx.insert(quizzes).values({
+            id: targetQuizId,
+            moduleId,
+            title,
+            order: currentMaxOrder + 1,
+            status: "draft",
+          });
+        }
+
+        // Insert new questions & answers
+        for (const q of questionsInput) {
+          const questionId = crypto.randomUUID();
+          await tx.insert(questions).values({
+            id: questionId,
+            quizId: targetQuizId,
+            content: q.content,
+            explanation: q.explanation || null,
+            order: q.order,
+            createdAt: now,
+          });
+
+          for (const a of q.answers) {
+            await tx.insert(answers).values({
+              id: crypto.randomUUID(),
+              questionId,
+              content: a.content,
+              isCorrect: a.isCorrect,
+              createdAt: now,
+            });
+          }
+        }
+      });
+
+      return {
+        success: true,
+        message: "Import toàn bộ cấu trúc bài tập trắc nghiệm thành công.",
+        code: "SUCCESS"
+      };
+    }),
 });
 
 async function getMaxOrderInModule(db: any, moduleId: string): Promise<number> {

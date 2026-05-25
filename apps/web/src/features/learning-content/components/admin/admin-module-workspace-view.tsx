@@ -34,9 +34,35 @@ import {
   Layers,
   Award,
   BookMarked,
+  Download,
+  FileSpreadsheet,
+  Loader2,
 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@engducation/ui/components/dialog";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from "@engducation/ui/components/table";
+import {
+  parseVocabularyExcel,
+  parseQuizExcel,
+  downloadVocabularyTemplate,
+  downloadQuizTemplate,
+} from "@/utils/excel-parser";
+
 
 type ActiveEditorState =
   | { type: "empty" }
@@ -71,9 +97,9 @@ export function AdminModuleWorkspaceView({ adminId, courseId, moduleId }: AdminM
   );
 
   const { createLesson, updateLesson, deleteLesson } = useLessonMutations(courseId);
-  const { deleteQuiz } = useQuizMutations(courseId);
+  const { deleteQuiz, importQuizFromExcel } = useQuizMutations(courseId);
   const { deleteWriting } = useWritingMutations(courseId);
-  const { remove: deleteVocabulary } = useVocabularyMutations();
+  const { remove: deleteVocabulary, importFromExcel } = useVocabularyMutations();
   const { upload: uploadVideo } = useCloudinaryUpload({
     folder: "engducation/courses/videos",
     resourceType: "video",
@@ -120,6 +146,88 @@ export function AdminModuleWorkspaceView({ adminId, courseId, moduleId }: AdminM
     }
     setUploadProgress(null);
   }, [activeEditor]);
+
+  // Excel Import States
+  const [importType, setImportType] = useState<"vocab" | "quiz" | null>(null);
+  const [parsedVocabItems, setParsedVocabItems] = useState<any[]>([]);
+  const [parsedQuizQuestions, setParsedQuizQuestions] = useState<any[]>([]);
+  const [importFileName, setImportFileName] = useState("");
+  const [isImportPreviewOpen, setIsImportPreviewOpen] = useState(false);
+  const [quizImportTitle, setQuizImportTitle] = useState("");
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>, type: "vocab" | "quiz") => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImportType(type);
+    setImportFileName(file.name);
+
+    try {
+      if (type === "vocab") {
+        const items = await parseVocabularyExcel(file);
+        if (items.length === 0) {
+          toast.error("Không tìm thấy dữ liệu từ vựng trong file Excel.");
+          return;
+        }
+        setParsedVocabItems(items);
+        setParsedQuizQuestions([]);
+        setIsImportPreviewOpen(true);
+      } else {
+        const questions = await parseQuizExcel(file);
+        if (questions.length === 0) {
+          toast.error("Không tìm thấy dữ liệu câu hỏi trong file Excel.");
+          return;
+        }
+        setQuizImportTitle(`Bài tập trắc nghiệm: ${currentModule?.title ?? ""}`);
+        setParsedQuizQuestions(questions);
+        setParsedVocabItems([]);
+        setIsImportPreviewOpen(true);
+      }
+    } catch (err: any) {
+      toast.error(`Lỗi đọc file Excel: ${err.message || "File không hợp lệ"}`);
+    } finally {
+      e.target.value = "";
+    }
+  };
+
+  const handleConfirmImport = async () => {
+    if (importType === "vocab") {
+      if (parsedVocabItems.length === 0) return;
+      try {
+        await importFromExcel.mutateAsync({
+          courseId,
+          moduleId,
+          items: parsedVocabItems,
+        });
+        setIsImportPreviewOpen(false);
+        setParsedVocabItems([]);
+      } catch {
+        // toast handles error
+      }
+    } else if (importType === "quiz") {
+      if (parsedQuizQuestions.length === 0) return;
+      if (!quizImportTitle.trim()) {
+        toast.error("Vui lòng nhập tiêu đề bài tập trắc nghiệm");
+        return;
+      }
+      try {
+        await importQuizFromExcel.mutateAsync({
+          moduleId,
+          title: quizImportTitle.trim(),
+          questions: parsedQuizQuestions.map((q, idx) => ({
+            content: q.content,
+            explanation: q.explanation || undefined,
+            order: q.order || idx + 1,
+            answers: q.answers,
+          })),
+        });
+        setIsImportPreviewOpen(false);
+        setParsedQuizQuestions([]);
+      } catch {
+        // toast handles error
+      }
+    }
+  };
 
   if (isLoading) {
     return (
@@ -599,13 +707,32 @@ export function AdminModuleWorkspaceView({ adminId, courseId, moduleId }: AdminM
                       <HelpCircle className="h-4 w-4 text-emerald-500" />
                       Bài tập Trắc nghiệm
                     </CardTitle>
-                    <Button
-                      onClick={() => setActiveEditor({ type: "new_quiz" })}
-                      size="sm"
-                      className="h-7 text-[10px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-2.5 shadow-xs"
-                    >
-                      <Plus className="h-3 w-3 mr-1" /> Tạo Quiz
-                    </Button>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={downloadQuizTemplate}
+                        className="h-7 text-[9px] font-bold px-2 rounded-lg border flex items-center gap-1 bg-background hover:bg-muted/10 transition-colors"
+                      >
+                        <Download className="h-3.5 w-3.5 text-emerald-500" /> Tải mẫu
+                      </Button>
+                      <label className="h-7 text-[9px] font-bold px-2 rounded-lg border hover:bg-muted/10 transition-colors flex items-center gap-1 cursor-pointer bg-background">
+                        <Upload className="h-3.5 w-3.5 text-emerald-500" /> Import Excel
+                        <input
+                          type="file"
+                          accept=".xlsx,.xls,.csv"
+                          onChange={(e) => handleFileChange(e, "quiz")}
+                          className="hidden"
+                        />
+                      </label>
+                      <Button
+                        onClick={() => setActiveEditor({ type: "new_quiz" })}
+                        size="sm"
+                        className="h-7 text-[10px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-2.5 shadow-xs"
+                      >
+                        <Plus className="h-3 w-3 mr-1" /> Tạo Quiz
+                      </Button>
+                    </div>
                   </CardHeader>
                   <CardContent className="p-4 flex-1">
                     {moduleQuizzes.length === 0 ? (
@@ -754,13 +881,32 @@ export function AdminModuleWorkspaceView({ adminId, courseId, moduleId }: AdminM
                   subtitle="Thêm và biên soạn danh mục từ vựng học thuật trực thuộc học phần này."
                   icon={<BookMarked className="h-5 w-5" />}
                   rightAction={
-                    <Button
-                      onClick={() => setActiveEditor({ type: "new_vocab" })}
-                      size="sm"
-                      className="h-8 text-[10px] font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-xl px-3.5 shadow-xs shrink-0"
-                    >
-                      <Plus className="h-3.5 w-3.5 mr-1" /> Thêm từ mới
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={downloadVocabularyTemplate}
+                        className="h-8 text-[10px] font-bold px-3 border rounded-xl flex items-center gap-1 bg-background hover:bg-muted/10 transition-colors"
+                      >
+                        <Download className="h-3.5 w-3.5 text-rose-500" /> Tải mẫu
+                      </Button>
+                      <label className="h-8 text-[10px] font-bold px-3 border hover:bg-muted/10 transition-colors rounded-xl flex items-center gap-1 cursor-pointer bg-background">
+                        <Upload className="h-3.5 w-3.5 text-rose-500" /> Import Excel
+                        <input
+                          type="file"
+                          accept=".xlsx,.xls,.csv"
+                          onChange={(e) => handleFileChange(e, "vocab")}
+                          className="hidden"
+                        />
+                      </label>
+                      <Button
+                        onClick={() => setActiveEditor({ type: "new_vocab" })}
+                        size="sm"
+                        className="h-8 text-[10px] font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-xl px-3.5 shadow-xs shrink-0"
+                      >
+                        <Plus className="h-3.5 w-3.5 mr-1" /> Thêm từ mới
+                      </Button>
+                    </div>
                   }
                 />
 
@@ -839,6 +985,148 @@ export function AdminModuleWorkspaceView({ adminId, courseId, moduleId }: AdminM
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Import Preview Modal */}
+      <Dialog open={isImportPreviewOpen} onOpenChange={setIsImportPreviewOpen}>
+        <DialogContent className="sm:max-w-4xl max-h-[85vh] overflow-y-auto rounded-2xl border border-border/80 shadow-2xl p-6 bg-background text-foreground">
+          <DialogHeader className="pb-3 border-b">
+            <DialogTitle className="text-sm font-bold uppercase tracking-wider flex items-center gap-2">
+              <FileSpreadsheet className="h-5 w-5 text-indigo-500" />
+              Xem trước dữ liệu import ({importFileName})
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground mt-1">
+              {importType === "vocab"
+                ? `Hệ thống đã nhận diện được ${parsedVocabItems.length} từ vựng từ file Excel của bạn. Vui lòng rà soát lại thông tin bên dưới trước khi đồng ý nạp.`
+                : `Hệ thống đã nhận diện được ${parsedQuizQuestions.length} câu hỏi từ file Excel của bạn. Vui lòng rà soát lại thông tin bên dưới trước khi đồng ý nạp.`}
+            </DialogDescription>
+          </DialogHeader>
+
+          {importType === "quiz" && (
+            <div className="flex flex-col gap-1.5 my-3 max-w-md">
+              <Label htmlFor="import-quiz-title" className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                Tiêu đề bài tập trắc nghiệm *
+              </Label>
+              <Input
+                id="import-quiz-title"
+                value={quizImportTitle}
+                onChange={(e) => setQuizImportTitle(e.target.value)}
+                placeholder="Ví dụ: Quiz: Grammar checkpoint 1"
+                className="h-9 text-xs rounded-xl focus-visible:ring-2 focus-visible:ring-emerald-500/20"
+              />
+            </div>
+          )}
+
+          <div className="my-4 border rounded-xl overflow-hidden bg-muted/5 max-h-[40vh] overflow-y-auto">
+            {importType === "vocab" ? (
+              <Table>
+                <TableHeader className="bg-muted/10">
+                  <TableRow>
+                    <TableHead className="w-12 text-center text-[10px] font-bold uppercase">STT</TableHead>
+                    <TableHead className="w-32 text-[10px] font-bold uppercase">Từ vựng</TableHead>
+                    <TableHead className="w-24 text-[10px] font-bold uppercase">Loại từ</TableHead>
+                    <TableHead className="w-28 text-[10px] font-bold uppercase">Phiên âm</TableHead>
+                    <TableHead className="text-[10px] font-bold uppercase">Định nghĩa &amp; Nghĩa Việt</TableHead>
+                    <TableHead className="text-[10px] font-bold uppercase">Ví dụ &amp; Dịch</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {parsedVocabItems.map((item, idx) => (
+                    <TableRow key={idx}>
+                      <TableCell className="text-center font-mono font-medium text-muted-foreground">{idx + 1}</TableCell>
+                      <TableCell className="font-bold text-foreground">{item.word}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-[9px] font-mono px-1 rounded bg-rose-500/5 text-rose-500 border-rose-500/10 uppercase">
+                          {item.partOfSpeech}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="font-mono text-muted-foreground">{item.phonetics}</TableCell>
+                      <TableCell className="max-w-[200px] whitespace-normal break-words">
+                        <div className="font-medium text-foreground">{item.definition}</div>
+                        <div className="text-[10px] text-muted-foreground mt-0.5">{item.translation}</div>
+                      </TableCell>
+                      <TableCell className="max-w-[220px] whitespace-normal break-words">
+                        <div className="italic text-foreground">{item.example}</div>
+                        <div className="text-[10px] text-muted-foreground mt-0.5">{item.exampleTranslation}</div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <Table>
+                <TableHeader className="bg-muted/10">
+                  <TableRow>
+                    <TableHead className="w-12 text-center text-[10px] font-bold uppercase">STT</TableHead>
+                    <TableHead className="w-64 text-[10px] font-bold uppercase">Nội dung câu hỏi</TableHead>
+                    <TableHead className="w-20 text-center text-[10px] font-bold uppercase">Thứ tự</TableHead>
+                    <TableHead className="text-[10px] font-bold uppercase">Các phương án trả lời &amp; Giải thích</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {parsedQuizQuestions.map((q, idx) => (
+                    <TableRow key={idx}>
+                      <TableCell className="text-center font-mono font-medium text-muted-foreground">{idx + 1}</TableCell>
+                      <TableCell className="font-bold text-foreground max-w-[200px] whitespace-normal break-words">{q.content}</TableCell>
+                      <TableCell className="text-center font-mono text-muted-foreground">{q.order}</TableCell>
+                      <TableCell className="max-w-[300px]">
+                        <div className="space-y-1">
+                          {q.answers.map((ans: any, aIdx: number) => (
+                            <div key={aIdx} className="flex items-center gap-1.5">
+                              <Badge
+                                variant="outline"
+                                className={`text-[8px] font-bold px-1 rounded-sm ${
+                                  ans.isCorrect
+                                    ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
+                                    : "bg-muted text-muted-foreground border-border"
+                                }`}
+                              >
+                                {ans.isCorrect ? "ĐÚNG" : "SAI"}
+                              </Badge>
+                              <span className="text-[11px] text-foreground">{ans.content}</span>
+                            </div>
+                          ))}
+                          {q.explanation && (
+                            <div className="text-[9px] text-muted-foreground mt-1.5 p-1.5 bg-muted/20 border rounded-lg whitespace-normal break-words">
+                              <strong className="font-bold uppercase text-[8px] block mb-0.5">Giải thích:</strong>
+                              {q.explanation}
+                            </div>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </div>
+
+          <DialogFooter className="pt-3 border-t gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsImportPreviewOpen(false)}
+              className="h-9 text-xs font-bold rounded-xl"
+            >
+              HỦY
+            </Button>
+            <Button
+              type="button"
+              onClick={handleConfirmImport}
+              disabled={importFromExcel.isPending || importQuizFromExcel.isPending}
+              className="h-9 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow-md px-5"
+            >
+              {importFromExcel.isPending || importQuizFromExcel.isPending ? (
+                <div className="flex items-center gap-1.5">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ĐANG NẠP...
+                </div>
+              ) : (
+                "XÁC NHẬN NẠP DỮ LIỆU"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

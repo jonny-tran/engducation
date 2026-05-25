@@ -52,9 +52,23 @@ export function useQuizMutations(courseId?: string) {
     })
   );
 
+  const importQuizFromExcel = useMutation(
+    trpc.admin.quizImportFromExcel.mutationOptions({
+      onSuccess: (res) => {
+        toast.success(res.message);
+        invalidateQuizQueries();
+      },
+      onError: (err) => {
+        toast.error(err.message);
+      },
+    })
+  );
+
   return {
     upsertQuizStructure,
     createQuizQuestion,
     deleteQuiz,
+    importQuizFromExcel,
   };
 }
+

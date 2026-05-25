@@ -61,6 +61,29 @@ const updateVocabularySchema = z.object({
     .optional(),
 });
 
+const importVocabularySchema = z.object({
+  courseId: z.string().min(1, "Khóa học không được để trống"),
+  moduleId: z.string().optional().nullable(),
+  items: z.array(
+    z.object({
+      word: z.string().min(1, "Từ gốc không được để trống"),
+      partOfSpeech: partOfSpeechSchema,
+      phonetics: z.string().min(1, "Phiên âm không được để trống"),
+      definition: z.string().min(1, "Định nghĩa không được để trống"),
+      translation: z.string().min(1, "Dịch nghĩa không được để trống"),
+      example: z.string().min(1, "Ví dụ không được để trống"),
+      exampleTranslation: z.string().min(1, "Dịch ví dụ không được để trống"),
+      mediaUrl: z
+        .string()
+        .url()
+        .optional()
+        .nullable()
+        .or(z.literal(""))
+        .transform((v) => (v === "" ? null : v)),
+    })
+  ).min(1, "Danh sách từ vựng import không được để trống"),
+});
+
 // ==========================================
 // ROUTER
 // ==========================================
@@ -255,4 +278,66 @@ export const adminVocabularyRouter = router({
         pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
       };
     }),
+
+  // ─── IMPORT FROM EXCEL ────────────────────────────────────
+
+  importFromExcel: adminProcedure
+    .input(importVocabularySchema)
+    .mutation(async ({ ctx, input }) => {
+      const { courseId, moduleId, items } = input;
+      const now = new Date();
+      const summary = { inserted: 0, skipped: 0, errors: [] as string[] };
+
+      await ctx.db.transaction(async (tx) => {
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i]!;
+          const sanitizedWord = item.word.trim().toLowerCase();
+          const pos = item.partOfSpeech;
+
+          try {
+            const existing = await tx.query.vocabularies.findFirst({
+              where: and(
+                eq(vocabularies.courseId, courseId),
+                eq(vocabularies.word, sanitizedWord),
+                eq(vocabularies.partOfSpeech, pos)
+              ),
+            });
+
+            if (existing) {
+              summary.skipped++;
+              continue;
+            }
+
+            await tx.insert(vocabularies).values({
+              id: crypto.randomUUID(),
+              courseId,
+              moduleId: moduleId ?? null,
+              word: sanitizedWord,
+              partOfSpeech: pos,
+              phonetics: item.phonetics.trim(),
+              definition: item.definition.trim(),
+              translation: item.translation.trim(),
+              example: item.example.trim(),
+              exampleTranslation: item.exampleTranslation.trim(),
+              mediaUrl: item.mediaUrl || null,
+              status: "draft",
+              createdAt: now,
+              updatedAt: now,
+            });
+
+            summary.inserted++;
+          } catch (err: any) {
+            summary.errors.push(`Dòng ${i + 2} (${sanitizedWord}): ${err.message}`);
+          }
+        }
+      });
+
+      return {
+        success: summary.errors.length === 0,
+        data: summary,
+        message: `Import hoàn tất. Thêm mới: ${summary.inserted}, Bỏ qua trùng: ${summary.skipped}, Lỗi: ${summary.errors.length}`,
+        code: "SUCCESS"
+      };
+    }),
 });
+
