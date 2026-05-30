@@ -10,6 +10,9 @@ import { Button } from "@engducation/ui/components/button";
 import { Badge } from "@engducation/ui/components/badge";
 import { Progress } from "@engducation/ui/components/progress";
 import { Skeleton } from "@engducation/ui/components/skeleton";
+import { useCart } from "@/context/cart-context";
+import { useStudentLearning } from "@/features/learning-content/hooks/use-student-learning";
+import { toast } from "sonner";
 import { 
   ArrowLeft, 
   BookOpen, 
@@ -17,7 +20,9 @@ import {
   CheckCircle2, 
   Lock, 
   Calendar,
-  ChevronRight
+  ChevronRight,
+  ShoppingCart,
+  GraduationCap
 } from "lucide-react";
 import Link from "next/link";
 
@@ -27,6 +32,8 @@ interface StudentCourseDetailViewProps {
 
 export function StudentCourseDetailView({ courseId }: StudentCourseDetailViewProps) {
   const router = useRouter();
+  const { addToCart, isInCart } = useCart();
+  const { enrollCourse } = useStudentLearning(courseId);
   
   // 1. Session checking for page protection
   const { data: session, isPending: isSessionPending } = authClient.useSession();
@@ -89,10 +96,14 @@ export function StudentCourseDetailView({ courseId }: StudentCourseDetailViewPro
     );
   }
 
+  const isEnrolled = courseDetail.isEnrolled;
   const allContents = (courseDetail.modules ?? []).flatMap((m) => m.contents ?? []);
   const completedCount = allContents.filter((c) => c.progressStatus === "completed").length;
   const totalCount = allContents.length;
   const percentComplete = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+
+  // First content for linear path entrance
+  const firstContent = allContents[0];
 
   // Map CEFR levels to premium visual themes
   const getCefrBadgeStyle = (level: typeof courseDetail.level) => {
@@ -113,6 +124,36 @@ export function StudentCourseDetailView({ courseId }: StudentCourseDetailViewPro
         return "border-slate-500/20 bg-slate-500/10 text-slate-600 dark:text-slate-400";
     }
   };
+
+  const handleEnrollFree = () => {
+    enrollCourse.mutate({ courseId });
+  };
+
+  const handleAddToCart = () => {
+    addToCart({
+      id: courseDetail.id,
+      title: courseDetail.title,
+      description: courseDetail.description,
+      thumbnailUrl: courseDetail.thumbnailUrl,
+      level: courseDetail.level,
+      price: courseDetail.price,
+    });
+    toast.success("Đã thêm khóa học vào giỏ hàng");
+  };
+
+  const handleBuyNow = () => {
+    addToCart({
+      id: courseDetail.id,
+      title: courseDetail.title,
+      description: courseDetail.description,
+      thumbnailUrl: courseDetail.thumbnailUrl,
+      level: courseDetail.level,
+      price: courseDetail.price,
+    });
+    router.push("/checkout");
+  };
+
+  const courseInCart = isInCart(courseDetail.id);
 
   return (
     <div className="min-h-screen bg-background flex flex-col w-full">
@@ -144,6 +185,11 @@ export function StudentCourseDetailView({ courseId }: StudentCourseDetailViewPro
                   <Badge variant="outline" className="border-border text-[9px] font-bold uppercase rounded-full bg-muted/20">
                     {totalCount} Bài học
                   </Badge>
+                  {!isEnrolled && (
+                    <Badge className="bg-amber-500/10 text-amber-600 border border-amber-500/20 text-[9px] font-black rounded-full flex items-center gap-1 px-2 py-0.5">
+                      <Lock className="h-2.5 w-2.5" /> CHƯA GHI DANH
+                    </Badge>
+                  )}
                 </div>
                 
                 <h1 className="text-xl sm:text-2xl font-black uppercase tracking-wide text-foreground">
@@ -161,22 +207,91 @@ export function StudentCourseDetailView({ courseId }: StudentCourseDetailViewPro
               {courseDetail.description ?? "Chưa có mô tả chi tiết từ giảng viên."}
             </p>
 
-            {/* Overall course completion stats */}
-            <div className="pt-4 border-t border-border/50 grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
-              <div className="space-y-1.5">
-                <div className="flex justify-between text-[10px] font-bold text-muted-foreground">
-                  <span>Tiến độ khóa học của bạn</span>
-                  <span>{percentComplete}%</span>
-                </div>
-                <Progress value={percentComplete} className="h-2" />
-              </div>
+            {/* Overall course completion stats / Purchase section */}
+            <div className="pt-4 border-t border-border/50">
+              {isEnrolled ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between text-[10px] font-bold text-muted-foreground">
+                      <span>Tiến độ khóa học của bạn</span>
+                      <span>{percentComplete}%</span>
+                    </div>
+                    <Progress value={percentComplete} className="h-2" />
+                  </div>
 
-              <div className="flex justify-end gap-2 text-xs font-bold text-foreground md:pl-6">
-                <div className="flex items-center gap-1.5 px-3.5 py-2 border rounded-2xl bg-muted/10">
-                  <span className="h-2 w-2 bg-emerald-500 rounded-full animate-pulse" />
-                  <span>Đã xong: {completedCount} / {totalCount} bài học</span>
+                  <div className="flex flex-wrap items-center justify-end gap-3 md:pl-6">
+                    <div className="flex items-center gap-1.5 px-3.5 py-2 border rounded-2xl bg-muted/10 text-xs font-bold text-foreground">
+                      <span className="h-2 w-2 bg-emerald-500 rounded-full animate-pulse" />
+                      <span>Đã xong: {completedCount} / {totalCount} bài học</span>
+                    </div>
+                    {firstContent && (
+                      <Link href={`/courses/${courseId}/learn?contentId=${firstContent.id}&type=${firstContent.type}` as any}>
+                        <Button size="sm" className="h-9 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-md px-4 flex items-center gap-1.5">
+                          <GraduationCap className="h-4 w-4" />
+                          Vào học ngay
+                        </Button>
+                      </Link>
+                    )}
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="flex flex-col sm:flex-row justify-between items-center gap-4 bg-muted/20 border border-border/40 p-4 rounded-2xl">
+                  <div className="space-y-1 text-center sm:text-left">
+                    <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Giá khóa học</div>
+                    <div className="text-xl font-black text-indigo-600 dark:text-indigo-400">
+                      {courseDetail.price === 0 ? (
+                        <span className="text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-full text-sm font-black uppercase">
+                          Miễn phí
+                        </span>
+                      ) : (
+                        `${courseDetail.price.toLocaleString("vi-VN")} đ`
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 w-full sm:w-auto justify-center sm:justify-end">
+                    {courseDetail.price === 0 ? (
+                      <Button 
+                        size="sm" 
+                        className="h-10 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-md px-6 flex items-center gap-1.5"
+                        onClick={handleEnrollFree}
+                        disabled={enrollCourse.isPending}
+                      >
+                        {enrollCourse.isPending ? "Đang xử lý..." : "Đăng ký & Học ngay"}
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    ) : (
+                      <>
+                        {courseInCart ? (
+                          <Link href="/checkout">
+                            <Button variant="outline" size="sm" className="h-10 text-xs font-bold border-indigo-500 text-indigo-600 hover:bg-indigo-50 rounded-xl px-5 flex items-center gap-1.5">
+                              <ShoppingCart className="h-4 w-4" />
+                              Xem giỏ hàng
+                            </Button>
+                          </Link>
+                        ) : (
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="h-10 text-xs font-bold border-border bg-card rounded-xl px-5 hover:bg-accent flex items-center gap-1.5"
+                            onClick={handleAddToCart}
+                          >
+                            <ShoppingCart className="h-4 w-4 text-muted-foreground" />
+                            Thêm vào giỏ
+                          </Button>
+                        )}
+                        <Button 
+                          size="sm" 
+                          className="h-10 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-md px-6"
+                          onClick={handleBuyNow}
+                        >
+                          Mua ngay
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -248,7 +363,13 @@ export function StudentCourseDetailView({ courseId }: StudentCourseDetailViewPro
                           </Badge>
                         );
                         
-                        if (isCompleted) {
+                        if (!isEnrolled) {
+                          statusBadge = (
+                            <Badge variant="outline" className="text-[9px] font-black uppercase text-amber-500/70 bg-amber-500/5 border-amber-500/10 px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
+                              <Lock className="h-2.5 w-2.5" /> BỊ KHÓA
+                            </Badge>
+                          );
+                        } else if (isCompleted) {
                           statusBadge = (
                             <Badge className="text-[9px] font-black uppercase bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-sm shadow-emerald-500/5">
                               <CheckCircle2 className="h-2.5 w-2.5 fill-emerald-500/10" /> ĐÃ XONG
@@ -266,21 +387,25 @@ export function StudentCourseDetailView({ courseId }: StudentCourseDetailViewPro
                           <Card 
                             key={item.id} 
                             className={`border transition-all duration-300 rounded-2xl shadow-sm ${
-                              isCompleted 
-                                ? 'border-emerald-500/10 bg-emerald-500/[0.01]' 
-                                : isLearning
-                                  ? 'border-indigo-500/25 bg-indigo-500/[0.01]'
-                                  : 'border-border/60 hover:border-border hover:bg-muted/10'
+                              !isEnrolled
+                                ? 'border-border/40 opacity-75'
+                                : isCompleted 
+                                  ? 'border-emerald-500/10 bg-emerald-500/[0.01]' 
+                                  : isLearning
+                                    ? 'border-indigo-500/25 bg-indigo-500/[0.01]'
+                                    : 'border-border/60 hover:border-border hover:bg-muted/10'
                             }`}
                           >
                             <CardContent className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                               <div className="flex items-start gap-3.5 max-w-full sm:max-w-[70%]">
                                 <div className={`h-8 w-8 rounded-xl font-mono font-black text-xs flex items-center justify-center shrink-0 border select-none ${
-                                  isCompleted
-                                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400'
-                                    : isLearning
-                                      ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-600 dark:text-indigo-400'
-                                      : 'bg-muted border-border text-muted-foreground'
+                                  !isEnrolled
+                                    ? 'bg-muted border-border text-muted-foreground/50'
+                                    : isCompleted
+                                      ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+                                      : isLearning
+                                        ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-600 dark:text-indigo-400'
+                                        : 'bg-muted border-border text-muted-foreground'
                                 }`}>
                                   {item.order}
                                 </div>
@@ -295,7 +420,11 @@ export function StudentCourseDetailView({ courseId }: StudentCourseDetailViewPro
                                     </Badge>
                                   </div>
                                   <p className="text-[10px] text-muted-foreground font-medium line-clamp-2 leading-relaxed">
-                                    {item.type === "lesson"
+                                    {!isEnrolled ? (
+                                      <span className="italic flex items-center gap-1 text-[9px] text-amber-600/80">
+                                        <Lock className="h-2.5 w-2.5" /> Hãy mua khóa học để xem chi tiết bài học.
+                                      </span>
+                                    ) : item.type === "lesson"
                                       ? (item.description ?? "Bài học đọc hoặc video lý thuyết.")
                                       : item.type === "writing"
                                       ? (item.prompt ?? "Bài tập viết luận củng cố kỹ năng.")
@@ -307,16 +436,27 @@ export function StudentCourseDetailView({ courseId }: StudentCourseDetailViewPro
                               <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0">
                                 {statusBadge}
                                 
-                                <Link href={`/courses/${courseId}/learn?contentId=${item.id}&type=${item.type}` as any}>
+                                {isEnrolled ? (
+                                  <Link href={`/courses/${courseId}/learn?contentId=${item.id}&type=${item.type}` as any}>
+                                    <Button 
+                                      size="sm" 
+                                      variant={isCompleted ? "outline" : "default"}
+                                      className="h-7 text-[10px] font-bold rounded-xl flex items-center gap-1 shadow-sm px-3.5"
+                                    >
+                                      Học ngay
+                                      <ChevronRight className="h-3 w-3" />
+                                    </Button>
+                                  </Link>
+                                ) : (
                                   <Button 
                                     size="sm" 
-                                    variant={isCompleted ? "outline" : "default"}
-                                    className="h-7 text-[10px] font-bold rounded-xl flex items-center gap-1 shadow-sm px-3.5"
+                                    variant="outline"
+                                    className="h-7 text-[10px] font-bold rounded-xl flex items-center gap-1 shadow-sm px-3.5 opacity-60 cursor-not-allowed"
+                                    disabled
                                   >
-                                    Học ngay
-                                    <ChevronRight className="h-3 w-3" />
+                                    <Lock className="h-2.5 w-2.5" /> Bị khóa
                                   </Button>
-                                </Link>
+                                )}
                               </div>
                             </CardContent>
                           </Card>

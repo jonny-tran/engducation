@@ -189,16 +189,13 @@ export const userContentRouter = router({
         ),
       });
 
-      if (!enrollment) {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "Bạn phải đăng ký khóa học này để truy cập nội dung học tập.",
-        });
-      }
+      const isEnrolled = !!enrollment;
 
-      const progressRows = await ctx.db.query.userProgress.findMany({
-        where: (tbl, { eq: dbEq }) => dbEq(tbl.userId, userId),
-      });
+      const progressRows = isEnrolled
+        ? await ctx.db.query.userProgress.findMany({
+            where: (tbl, { eq: dbEq }) => dbEq(tbl.userId, userId),
+          })
+        : [];
 
       const progressMap = new Map<string, "learning" | "completed" | null>();
       for (const p of progressRows) {
@@ -211,6 +208,8 @@ export const userContentRouter = router({
         const combined = [
           ...(mod.lessons ?? []).map((l) => ({
             ...l,
+            videoUrl: isEnrolled ? l.videoUrl : null,
+            videoPublicId: isEnrolled ? l.videoPublicId : null,
             type: "lesson" as const,
             progressStatus: progressMap.get(l.id) ?? null,
           })),
@@ -221,6 +220,9 @@ export const userContentRouter = router({
           })),
           ...(mod.writingAssignments ?? []).map((w) => ({
             ...w,
+            prompt: isEnrolled ? w.prompt : "",
+            rubric: isEnrolled ? w.rubric : "",
+            suggestedAnswer: isEnrolled ? w.suggestedAnswer : null,
             type: "writing" as const,
             progressStatus: progressMap.get(w.id) ?? null,
           })),
@@ -235,6 +237,7 @@ export const userContentRouter = router({
       return {
         ...course,
         modules: modulesWithContents,
+        isEnrolled,
       };
     }),
 
@@ -286,6 +289,51 @@ export const userContentRouter = router({
       });
 
       return { enrolled: true };
+    }),
+
+  courseEnrollBatch: protectedProcedure
+    .input(z.object({ courseIds: z.array(z.string().min(1)).min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      const { courseIds } = input;
+
+      return await ctx.db.transaction(async (tx) => {
+        for (const courseId of courseIds) {
+          const course = await tx.query.courses.findFirst({
+            where: and(eq(courses.id, courseId), isNull(courses.deletedAt)),
+          });
+
+          if (!course) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: `Khóa học không tồn tại: ${courseId}`,
+            });
+          }
+
+          if (course.status !== "published") {
+            throw new TRPCError({
+              code: "FORBIDDEN",
+              message: `Khóa học chưa được xuất bản: ${course.title}`,
+            });
+          }
+
+          const existing = await tx.query.userEnrollments.findFirst({
+            where: and(
+              eq(userEnrollments.userId, userId),
+              eq(userEnrollments.courseId, courseId)
+            ),
+          });
+
+          if (!existing) {
+            await tx.insert(userEnrollments).values({
+              userId,
+              courseId,
+            });
+          }
+        }
+
+        return { enrolled: true };
+      });
     }),
 
   // ─── LESSONS ─────────────────────────────────────────────
