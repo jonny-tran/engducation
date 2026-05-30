@@ -4,7 +4,7 @@ import { env } from "@engducation/env/web";
 import { toast } from "sonner";
 
 export const axiosClient = axios.create({
-  baseURL: env.NEXT_PUBLIC_SERVER_URL,
+  baseURL: env.NEXT_PUBLIC_API_URL,
   timeout: 30000, // 30 giây cho các tác vụ AI xử lý lâu
   withCredentials: true, // Gửi cookie session tự động (Better Auth)
   headers: {
