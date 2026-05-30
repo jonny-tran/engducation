@@ -14,14 +14,15 @@ function findProjectRoot(startDir: string): string {
 }
 
 const rootDir = findProjectRoot(process.cwd());
-const nodeEnv = process.env.NODE_ENV || "development";
-
-if (nodeEnv === "production") {
-  dotenv.config({ path: path.join(rootDir, ".env.production") });
-} else {
-  dotenv.config({ path: path.join(rootDir, ".env.development") });
-}
+dotenv.config({ path: path.join(rootDir, ".env") });
 dotenv.config(); // Fallback
+
+// Map production overrides if NODE_ENV is production
+if (process.env.NODE_ENV === "production") {
+  if (process.env.NEXT_PUBLIC_API_URL_PROD) {
+    process.env.NEXT_PUBLIC_API_URL = process.env.NEXT_PUBLIC_API_URL_PROD;
+  }
+}
 
 import "@engducation/env/web";
 import type { NextConfig } from "next";

@@ -1,7 +1,7 @@
-import dotenv from "dotenv";
-import path from "path";
-import fs from "fs";
 import { createEnv } from "@t3-oss/env-core";
+import dotenv from "dotenv";
+import fs from "fs";
+import path from "path";
 import { z } from "zod";
 
 function findProjectRoot(startDir: string): string {
@@ -16,16 +16,27 @@ function findProjectRoot(startDir: string): string {
 }
 
 const rootDir = findProjectRoot(process.cwd());
-const nodeEnv = process.env.NODE_ENV || "development";
+dotenv.config({ path: path.join(rootDir, ".env") });
+dotenv.config(); // Fallback
 
-if (nodeEnv === "production") {
-  dotenv.config({ path: path.join(rootDir, ".env.production") });
-} else {
-  dotenv.config({ path: path.join(rootDir, ".env.development") });
+// Map production overrides if NODE_ENV is production
+if (process.env.NODE_ENV === "production") {
+  if (process.env.DATABASE_PRODCUTION_URL) {
+    process.env.DATABASE_URL = process.env.DATABASE_PRODCUTION_URL;
+  }
+  if (process.env.CORS_ORIGIN_PROD) {
+    process.env.CORS_ORIGIN = process.env.CORS_ORIGIN_PROD;
+  }
+  if (process.env.PUBLIC_URL_PROD) {
+    process.env.PUBLIC_URL = process.env.PUBLIC_URL_PROD;
+  }
+  if (process.env.BETTER_AUTH_URL_PROD) {
+    process.env.BETTER_AUTH_URL = process.env.BETTER_AUTH_URL_PROD;
+  }
+  if (process.env.PROD_PASS) {
+    process.env.DEV_PASS = process.env.PROD_PASS;
+  }
 }
-
-// Fallback to local .env if any
-dotenv.config();
 
 export const env = createEnv({
   server: {

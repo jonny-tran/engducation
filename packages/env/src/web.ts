@@ -8,7 +8,10 @@ export const env = createEnv({
     NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET: z.string().min(1),
   },
   runtimeEnv: {
-    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
+    NEXT_PUBLIC_API_URL:
+      process.env.NODE_ENV === "production"
+        ? process.env.NEXT_PUBLIC_API_URL_PROD
+        : process.env.NEXT_PUBLIC_API_URL,
     NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
     NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET: process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET,
   },
