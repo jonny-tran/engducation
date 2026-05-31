@@ -1,7 +1,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@engducation/auth";
-import { StudentCoursesView } from "@/features/learning-content";
+import { StudentCoursesView } from "@/features/learning-content/components/student/student-courses-view";
 
 export default async function CoursesPage() {
   const session = await auth.api.getSession({

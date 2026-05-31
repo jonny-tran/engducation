@@ -1,7 +1,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@engducation/auth";
-import { StudentWelcomeView } from "@/features/learning-content";
+import { StudentWelcomeView } from "@/features/learning-content/components/student/student-welcome-view";
 import UserProfileActions from "./user-profile-actions";
 import { ModeToggle } from "@/components/ui/mode-toggle";
 

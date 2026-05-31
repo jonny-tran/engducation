@@ -1,7 +1,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@engducation/auth";
-import { AdminCourseDetailView } from "@/features/learning-content";
+import { AdminCourseDetailView } from "@/features/learning-content/components/admin/admin-course-detail-view";
 
 interface PageProps {
   params: Promise<{ adminId: string; courseId: string }>;

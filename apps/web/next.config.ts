@@ -1,37 +1,25 @@
-import dotenv from "dotenv";
-import path from "path";
-import fs from "fs";
-
-function findProjectRoot(startDir: string): string {
-  let dir = startDir;
-  while (dir !== path.dirname(dir)) {
-    if (fs.existsSync(path.join(dir, "pnpm-workspace.yaml"))) {
-      return dir;
-    }
-    dir = path.dirname(dir);
-  }
-  return startDir;
-}
-
-const rootDir = findProjectRoot(process.cwd());
-dotenv.config({ path: path.join(rootDir, ".env") });
-dotenv.config(); // Fallback
-
-// Map production overrides if NODE_ENV is production
-if (process.env.NODE_ENV === "production") {
-  if (process.env.NEXT_PUBLIC_API_URL_PROD) {
-    process.env.NEXT_PUBLIC_API_URL = process.env.NEXT_PUBLIC_API_URL_PROD;
-  }
-}
-
+import "./env-loader";
 import "@engducation/env/web";
 import type { NextConfig } from "next";
+import path from "path";
 
 const nextConfig: NextConfig = {
   typedRoutes: true,
-  reactCompiler: true,
+  reactCompiler: process.env.NODE_ENV === "production",
   turbopack: {
     root: path.resolve(__dirname, "../../"),
+    resolveAlias: {
+      react: "../../node_modules/react",
+      "react-dom": "../../node_modules/react-dom",
+    },
+  },
+  webpack: (config) => {
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      react: path.resolve(__dirname, "../../node_modules/react"),
+      "react-dom": path.resolve(__dirname, "../../node_modules/react-dom"),
+    };
+    return config;
   },
   env: {
     CLOUDINARY_CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME ?? "",

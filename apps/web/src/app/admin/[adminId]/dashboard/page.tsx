@@ -11,7 +11,8 @@ import { Separator } from "@engducation/ui/components/separator";
 import { SidebarTrigger } from "@engducation/ui/components/sidebar";
 import { ShieldCheck } from "lucide-react";
 import AdminDashboardActions from "./admin-dashboard-actions";
-import { AdminDashboardView, AdminStatsCards } from "@/features/learning-content";
+import { AdminDashboardView } from "@/features/learning-content/components/admin/admin-dashboard-view";
+import { AdminStatsCards } from "@/features/learning-content/components/admin/admin-stats-cards";
 import { ModeToggle } from "@/components/ui/mode-toggle";
 
 interface PageProps {

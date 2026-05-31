@@ -1,18 +1,20 @@
-import { createEnv } from "@t3-oss/env-core";
 import dotenv from "dotenv";
 import fs from "fs";
 import path from "path";
-import { z } from "zod";
 
 function findProjectRoot(startDir: string): string {
-  let dir = startDir;
+  let dir = path.normalize(path.resolve(startDir));
   while (dir !== path.dirname(dir)) {
-    if (fs.existsSync(path.join(/*turbopackIgnore: true*/ dir, "pnpm-workspace.yaml"))) {
+    const checkPath = path.normalize(path.join(/*turbopackIgnore: true*/ dir, "pnpm-workspace.yaml"));
+    if (!checkPath.startsWith(dir)) {
+      throw new Error("Invalid path specified!");
+    }
+    if (fs.existsSync(checkPath)) {
       return dir;
     }
     dir = path.dirname(dir);
   }
-  return startDir;
+  return dir;
 }
 
 const rootDir = findProjectRoot(process.cwd());
@@ -26,16 +28,21 @@ const envFiles = [
 ];
 
 for (const file of envFiles) {
-  if (fs.existsSync(file)) {
-    dotenv.config({ path: file });
+  const normalizedFile = path.normalize(path.resolve(file));
+  if (!normalizedFile.startsWith(rootDir)) {
+    throw new Error("Invalid path specified!");
+  }
+  if (fs.existsSync(normalizedFile)) {
+    dotenv.config({ path: normalizedFile });
   }
 }
 
 // Map variables dynamically based on NODE_ENV
 const rawNodeEnv = process.env.NODE_ENV || "development";
-const isProd = rawNodeEnv.toLowerCase() === "production";
+const envMode = rawNodeEnv.toLowerCase() === "production" ? "PRODUCTION" : "DEVELOPMENT";
 
-// For DATABASE_URL: development uses DATABASE_URL normally, production uses DATABASE_URL_PRODUCTION
+const isProd = envMode === "PRODUCTION";
+
 if (isProd) {
   if (process.env.DATABASE_URL_PRODUCTION) {
     process.env.DATABASE_URL = process.env.DATABASE_URL_PRODUCTION;
@@ -46,8 +53,6 @@ if (isProd) {
   }
 }
 
-// Map other variables dynamically based on NODE_ENV
-const envMode = isProd ? "PRODUCTION" : "DEVELOPMENT";
 const envKeysToMap = [
   "CORS_ORIGIN",
   "PUBLIC_URL",
@@ -62,26 +67,5 @@ for (const key of envKeysToMap) {
     process.env[key] = envVal;
   }
 }
-
-export const env = createEnv({
-  server: {
-    DATABASE_URL: z.string().min(1),
-    BETTER_AUTH_SECRET: z.string().min(32),
-    BETTER_AUTH_URL: z.string().min(1),
-    CORS_ORIGIN: z.string().min(1),
-    PUBLIC_URL: z
-      .string()
-      .min(1)
-      .default("http://localhost:3000"),
-    NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
-    CLOUDINARY_CLOUD_NAME: z.string().min(1),
-    CLOUDINARY_API_KEY: z.string().min(1),
-    CLOUDINARY_API_SECRET: z.string().min(1),
-    CLOUDINARY_UPLOAD_PRESET: z.string().min(1),
-  },
-  runtimeEnv: process.env,
-  emptyStringAsUndefined: true,
-  skipValidation: !!process.env.SKIP_ENV_VALIDATION,
-});
 
 

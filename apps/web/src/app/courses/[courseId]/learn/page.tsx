@@ -4,7 +4,7 @@ import * as React from "react";
 import { authClient } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 import { StudentHeader } from "@/components/layout/student-header";
-import { StudentDashboardView } from "@/features/learning-content";
+import { StudentDashboardView } from "@/features/learning-content/components/student/student-dashboard-view";
 import { Skeleton } from "@engducation/ui/components/skeleton";
 
 interface PageProps {

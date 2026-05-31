@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import { useVocabularyMutations } from "../hooks/use-vocabulary-mutations";
-import { useCloudinaryUpload } from "@/features/learning-content";
+import { useCloudinaryUpload } from "@/features/learning-content/hooks/use-cloudinary-upload";
 import { Button } from "@engducation/ui/components/button";
 import { Input } from "@engducation/ui/components/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@engducation/ui/components/card";
