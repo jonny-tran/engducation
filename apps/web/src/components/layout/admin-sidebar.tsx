@@ -72,11 +72,19 @@ export function AdminSidebar({ session, ...props }: AdminSidebarProps) {
         title: "Quản lý đào tạo",
         url: `/admin/${adminId}/courses`,
         icon: BookOpen,
-        isActive: pathname.startsWith(`/admin/${adminId}/courses`),
+        isActive: pathname.startsWith(`/admin/${adminId}/courses`) || pathname.startsWith(`/admin/${adminId}/prompts`) || pathname.startsWith(`/admin/${adminId}/reviews`),
         items: [
           {
             title: "Khóa học",
             url: `/admin/${adminId}/courses`,
+          },
+          {
+            title: "Cấu hình Prompt AI",
+            url: `/admin/${adminId}/prompts`,
+          },
+          {
+            title: "Yêu cầu chấm lại",
+            url: `/admin/${adminId}/reviews`,
           },
         ],
       },
@@ -84,11 +92,27 @@ export function AdminSidebar({ session, ...props }: AdminSidebarProps) {
         title: "Hệ thống",
         url: `/admin/${adminId}/settings`,
         icon: Settings,
-        isActive: pathname.startsWith(`/admin/${adminId}/settings`) || pathname.startsWith(`/admin/${adminId}/users`),
+        isActive: pathname.startsWith(`/admin/${adminId}/settings`) || pathname.startsWith(`/admin/${adminId}/users`) || pathname.startsWith(`/admin/${adminId}/vouchers`) || pathname.startsWith(`/admin/${adminId}/orders`) || pathname.startsWith(`/admin/${adminId}/audit`) || pathname.startsWith(`/admin/${adminId}/ai`),
         items: [
           {
             title: "Người dùng",
             url: `/admin/${adminId}/users`,
+          },
+          {
+            title: "Mã giảm giá (Vouchers)",
+            url: `/admin/${adminId}/vouchers`,
+          },
+          {
+            title: "Đơn hàng & Giao dịch",
+            url: `/admin/${adminId}/orders`,
+          },
+          {
+            title: "Nhật ký kiểm toán",
+            url: `/admin/${adminId}/audit`,
+          },
+          {
+            title: "Giám sát AI",
+            url: `/admin/${adminId}/ai`,
           },
           {
             title: "Cấu hình chung",

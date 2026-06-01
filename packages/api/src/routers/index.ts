@@ -1,5 +1,6 @@
 import { protectedProcedure, publicProcedure, router } from "../index";
 import { adminContentRouter, adminVocabularyRouter } from "./admin";
+import { adminAdvancedRouter } from "./admin/advanced";
 import { userContentRouter, userVocabularyRouter } from "./user";
 import { mediaRouter } from "./media";
 
@@ -17,6 +18,7 @@ export const appRouter = router({
   user: userContentRouter,
   adminVocabulary: adminVocabularyRouter,
   userVocabulary: userVocabularyRouter,
+  adminAdvanced: adminAdvancedRouter,
   media: mediaRouter,
 });
 

@@ -10,10 +10,16 @@ export async function createContext({ context }: CreateContextOptions) {
   const session = await auth.api.getSession({
     headers: context.request.headers,
   });
+  
+  const headers = context.request.headers;
+  const ipAddress = headers.get("x-forwarded-for") || headers.get("x-real-ip") || null;
+
   return {
     auth: null,
     session,
     db: createDb(),
+    headers,
+    ipAddress,
   };
 }
 

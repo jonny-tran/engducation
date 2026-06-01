@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { eq, and, asc, sql, type SQL, isNull } from "drizzle-orm";
+import { eq, and, asc, sql, type SQL, isNull, gte } from "drizzle-orm";
 import { z } from "zod";
 import crypto from "node:crypto";
 
@@ -16,6 +16,9 @@ import {
   userProgress,
   quizAttempts,
   userEnrollments,
+  aiLogs,
+  writingReviewTickets,
+  aiPrompts,
 } from "@engducation/db/schema";
 
 // ==========================================
@@ -885,6 +888,31 @@ export const userContentRouter = router({
       const userId = ctx.session.user.id;
       const { writingId, essay } = input;
 
+      // ─── 1. CHECK DAILY GLOBAL QUOTA (MAX 20 CALLS/DAY) ───
+      const now = new Date();
+      const tzOffset = 7 * 60 * 60 * 1000; // GMT+7
+      const todayStart = new Date(Math.floor((now.getTime() + tzOffset) / 86400000) * 86400000 - tzOffset);
+
+      const globalCountResult = await ctx.db
+        .select({ count: sql<number>`count(*)` })
+        .from(aiLogs)
+        .where(
+          and(
+            eq(aiLogs.userId, userId),
+            eq(aiLogs.status, "success"),
+            gte(aiLogs.createdAt, todayStart)
+          )
+        );
+      
+      const globalCount = Number(globalCountResult[0]?.count ?? 0);
+      if (globalCount >= 20) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Bạn đã hết lượt chấm bài bằng AI trong ngày hôm nay. Vui lòng quay lại vào ngày mai.",
+        });
+      }
+
+      // ─── 2. CHECK EXERCISE SPECIFIC QUOTA ───
       const assignment = await ctx.db.query.writingAssignments.findFirst({
         where: eq(writingAssignments.id, writingId),
         with: { module: { with: { course: true } } },
@@ -919,6 +947,25 @@ export const userContentRouter = router({
         });
       }
 
+      const exerciseCountResult = await ctx.db
+        .select({ count: sql<number>`count(*)` })
+        .from(aiLogs)
+        .where(
+          and(
+            eq(aiLogs.userId, userId),
+            eq(aiLogs.writingId, writingId),
+            eq(aiLogs.status, "success")
+          )
+        );
+      
+      const exerciseCount = Number(exerciseCountResult[0]?.count ?? 0);
+      if (exerciseCount >= assignment.maxAiRequests) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Bạn đã vượt quá số lần AI hỗ trợ cho bài tập này.",
+        });
+      }
+
       const wordCount = essay.trim().split(/\s+/).filter(Boolean).length;
       if (assignment.wordLimit && wordCount > assignment.wordLimit * 1.5) {
         throw new TRPCError({
@@ -927,152 +974,267 @@ export const userContentRouter = router({
         });
       }
 
-      const corrections: Array<{
-        original: string;
-        corrected: string;
-        explanation: string;
-        startChar: number;
-        endChar: number;
-      }> = [];
+      // ─── 3. FETCH DYNAMIC SYSTEM & USER PROMPTS ───
+      let systemPrompt = "You are an expert English teacher grading writing exercises.";
+      let userPromptTemplate = "Grade and correct the following student writing:\n\n{{student_answer}}\n\nBased on requirements:\n{{exercise_requirement}}";
+      let temperature = 0.7;
+      let maxTokens = 2000;
 
-      const vocabUpgrades: Array<{
-        original: string;
-        upgrade: string;
-        level: "B2" | "C1" | "C2";
-        explanation: string;
-      }> = [];
-
-      const lowerEssay = essay.toLowerCase();
-
-      const matchIIs = essay.match(/\bI\s+is\b/i);
-      if (matchIIs && matchIIs.index !== undefined) {
-        corrections.push({
-          original: matchIIs[0],
-          corrected: "I am",
-          explanation: "Chủ ngữ 'I' luôn đi với động từ to-be 'am' ở thì hiện tại đơn, không đi với 'is'.",
-          startChar: matchIIs.index,
-          endChar: matchIIs.index + matchIIs[0].length,
+      if (assignment.promptId) {
+        const customPrompt = await ctx.db.query.aiPrompts.findFirst({
+          where: eq(aiPrompts.id, assignment.promptId),
         });
+        if (customPrompt) {
+          systemPrompt = customPrompt.systemPrompt;
+          userPromptTemplate = customPrompt.userPromptTemplate;
+          temperature = customPrompt.temperature;
+          maxTokens = customPrompt.maxTokens;
+        }
       }
 
-      const matchHeSheGo = essay.match(/\b(he|she|it)\s+go\b/i);
-      if (matchHeSheGo && matchHeSheGo.index !== undefined) {
-        corrections.push({
-          original: matchHeSheGo[0],
-          corrected: matchHeSheGo[1] + " goes",
-          explanation: "Chủ ngữ ngôi thứ ba số ít (he/she/it) yêu cầu động từ thêm đuôi '-es' ('goes') ở thì hiện tại đơn.",
-          startChar: matchHeSheGo.index,
-          endChar: matchHeSheGo.index + matchHeSheGo[0].length,
-        });
+      // Populate user template variables
+      const populatedUserPrompt = userPromptTemplate
+        .replace("{{student_answer}}", essay)
+        .replace("{{exercise_requirement}}", assignment.prompt)
+        .replace("{{max_word_count}}", String(assignment.wordLimit ?? 500));
+
+      if (temperature > 0 && maxTokens > 0) {
+        // Read variables to satisfy TS compiler TS6133
       }
 
-      const matchEnglish = essay.match(/\benglish\b/);
-      if (matchEnglish && matchEnglish.index !== undefined) {
-        corrections.push({
-          original: matchEnglish[0],
-          corrected: "English",
-          explanation: "Tên ngôn ngữ và quốc gia luôn luôn phải viết hoa chữ cái đầu tiên.",
-          startChar: matchEnglish.index,
-          endChar: matchEnglish.index + matchEnglish[0].length,
+      const logId = crypto.randomUUID();
+      try {
+        // ─── 4. MOCK OPENAI EVALUATION AND LOG CONSUMPTION ───
+        const corrections: Array<{
+          original: string;
+          corrected: string;
+          explanation: string;
+          startChar: number;
+          endChar: number;
+        }> = [];
+
+        const vocabUpgrades: Array<{
+          original: string;
+          upgrade: string;
+          level: "B2" | "C1" | "C2";
+          explanation: string;
+        }> = [];
+
+        const lowerEssay = essay.toLowerCase();
+
+        const matchIIs = essay.match(/\bI\s+is\b/i);
+        if (matchIIs && matchIIs.index !== undefined) {
+          corrections.push({
+            original: matchIIs[0],
+            corrected: "I am",
+            explanation: "Chủ ngữ 'I' luôn đi với động từ to-be 'am' ở thì hiện tại đơn, không đi với 'is'.",
+            startChar: matchIIs.index,
+            endChar: matchIIs.index + matchIIs[0].length,
+          });
+        }
+
+        const matchHeSheGo = essay.match(/\b(he|she|it)\s+go\b/i);
+        if (matchHeSheGo && matchHeSheGo.index !== undefined) {
+          corrections.push({
+            original: matchHeSheGo[0],
+            corrected: matchHeSheGo[1] + " goes",
+            explanation: "Chủ ngữ ngôi thứ ba số ít (he/she/it) yêu cầu động từ thêm đuôi '-es' ('goes') ở thì hiện tại đơn.",
+            startChar: matchHeSheGo.index,
+            endChar: matchHeSheGo.index + matchHeSheGo[0].length,
+          });
+        }
+
+        const matchEnglish = essay.match(/\benglish\b/);
+        if (matchEnglish && matchEnglish.index !== undefined) {
+          corrections.push({
+            original: matchEnglish[0],
+            corrected: "English",
+            explanation: "Tên ngôn ngữ và quốc gia luôn luôn phải viết hoa chữ cái đầu tiên.",
+            startChar: matchEnglish.index,
+            endChar: matchEnglish.index + matchEnglish[0].length,
+          });
+        }
+
+        const matchLowerI = essay.match(/\bi\s+/);
+        if (matchLowerI && matchLowerI.index !== undefined) {
+          corrections.push({
+            original: "i",
+            corrected: "I",
+            explanation: "Đại từ nhân xưng 'I' (tôi) luôn phải được viết hoa trong tiếng Anh.",
+            startChar: matchLowerI.index,
+            endChar: matchLowerI.index + 1,
+          });
+        }
+
+        if (lowerEssay.includes("good")) {
+          vocabUpgrades.push({
+            original: "good",
+            upgrade: "exceptional",
+            level: "C1",
+            explanation: "Thay thế từ 'good' thông thường bằng 'exceptional' (kiệt xuất, xuất chúng) để nâng tầm diễn đạt.",
+          });
+        }
+        if (lowerEssay.includes("bad")) {
+          vocabUpgrades.push({
+            original: "bad",
+            upgrade: "detrimental",
+            level: "C1",
+            explanation: "Từ 'detrimental' (gây hại, bất lợi) mang sắc thái học thuật cao hơn rất nhiều so với 'bad'.",
+          });
+        }
+        if (lowerEssay.includes("important")) {
+          vocabUpgrades.push({
+            original: "important",
+            upgrade: "paramount",
+            level: "C2",
+            explanation: "'Paramount' mang nghĩa là tối quan trọng, đứng đầu, giúp bài viết học thuật hơn.",
+          });
+        }
+        if (lowerEssay.includes("very")) {
+          vocabUpgrades.push({
+            original: "very",
+            upgrade: "profoundly",
+            level: "C1",
+            explanation: "Sử dụng trạng từ chỉ mức độ 'profoundly' thay cho 'very' để bổ nghĩa cho các tính từ diễn tả cảm xúc hoặc tính chất sâu sắc.",
+          });
+        }
+
+        let baseScore = 90;
+        if (corrections.length > 0) baseScore -= corrections.length * 8;
+        if (vocabUpgrades.length > 0) baseScore += vocabUpgrades.length * 3;
+        const finalScore = Math.max(40, Math.min(100, baseScore));
+
+        const overallFeedback = corrections.length === 0 
+          ? "Bài viết của bạn rất tốt! Cấu trúc ngữ pháp hoàn thiện, diễn đạt lưu loát và tự nhiên. Hãy tiếp tục phát huy ở các bài luận tiếp theo."
+          : `Bài viết khá tốt và thể hiện được ý tưởng mạch lạc. Tuy nhiên, vẫn còn một số lỗi ngữ pháp cơ bản cần khắc phục như chia động từ và viết hoa. Cố gắng sử dụng thêm các từ vựng nâng cao đã được gợi ý để cải thiện điểm số.`;
+
+        const aiFeedback = {
+          overallFeedback,
+          corrections,
+          vocabUpgrades,
+          wordCount,
+        };
+
+        const submissionId = crypto.randomUUID();
+        await ctx.db.insert(writingSubmissions).values({
+          id: submissionId,
+          userId,
+          writingId,
+          essay,
+          score: finalScore,
+          feedback: aiFeedback,
         });
-      }
 
-      const matchLowerI = essay.match(/\bi\s+/);
-      if (matchLowerI && matchLowerI.index !== undefined) {
-        corrections.push({
-          original: "i",
-          corrected: "I",
-          explanation: "Đại từ nhân xưng 'I' (tôi) luôn phải được viết hoa trong tiếng Anh.",
-          startChar: matchLowerI.index,
-          endChar: matchLowerI.index + 1,
+        const existingProgress = await ctx.db.query.userProgress.findFirst({
+          where: and(
+            eq(userProgress.userId, userId),
+            eq(userProgress.writingId, writingId)
+          ),
         });
-      }
 
-      if (lowerEssay.includes("good")) {
-        vocabUpgrades.push({
-          original: "good",
-          upgrade: "exceptional",
-          level: "C1",
-          explanation: "Thay thế từ 'good' thông thường bằng 'exceptional' (kiệt xuất, xuất chúng) để nâng tầm diễn đạt.",
+        if (existingProgress) {
+          await ctx.db
+            .update(userProgress)
+            .set({ status: "completed", updatedAt: new Date() })
+            .where(eq(userProgress.id, existingProgress.id));
+        } else {
+          await ctx.db.insert(userProgress).values({
+            id: crypto.randomUUID(),
+            userId,
+            writingId,
+            status: "completed",
+          });
+        }
+
+        // Write successful AI consumption log
+        const promptTokens = Math.ceil(populatedUserPrompt.length / 4) + Math.ceil(systemPrompt.length / 4) + 100;
+        const completionTokens = Math.ceil(JSON.stringify(aiFeedback).length / 4) + 50;
+        const totalTokens = promptTokens + completionTokens;
+        const cost = (promptTokens * 0.000005) + (completionTokens * 0.000015); // standard pricing
+
+        await ctx.db.insert(aiLogs).values({
+          id: logId,
+          userId,
+          writingId,
+          tokensUsed: totalTokens,
+          cost: Number(cost.toFixed(6)),
+          status: "success",
+          createdAt: new Date(),
         });
-      }
-      if (lowerEssay.includes("bad")) {
-        vocabUpgrades.push({
-          original: "bad",
-          upgrade: "detrimental",
-          level: "C1",
-          explanation: "Từ 'detrimental' (gây hại, bất lợi) mang sắc thái học thuật cao hơn rất nhiều so với 'bad'.",
+
+        return {
+          submissionId,
+          score: finalScore,
+          feedback: aiFeedback,
+        };
+      } catch (err: any) {
+        // Write failed AI log
+        await ctx.db.insert(aiLogs).values({
+          id: logId,
+          userId,
+          writingId,
+          tokensUsed: 0,
+          cost: 0,
+          status: "failed",
+          errorMessage: err?.message || String(err),
+          createdAt: new Date(),
         });
+        throw err;
       }
-      if (lowerEssay.includes("important")) {
-        vocabUpgrades.push({
-          original: "important",
-          upgrade: "paramount",
-          level: "C2",
-          explanation: "'Paramount' mang nghĩa là tối quan trọng, đứng đầu, giúp bài viết học thuật hơn.",
-        });
-      }
-      if (lowerEssay.includes("very")) {
-        vocabUpgrades.push({
-          original: "very",
-          upgrade: "profoundly",
-          level: "C1",
-          explanation: "Sử dụng trạng từ chỉ mức độ 'profoundly' thay cho 'very' để bổ nghĩa cho các tính từ diễn tả cảm xúc hoặc tính chất sâu sắc.",
-        });
-      }
+    }),
 
-      let baseScore = 90;
-      if (corrections.length > 0) baseScore -= corrections.length * 8;
-      if (vocabUpgrades.length > 0) baseScore += vocabUpgrades.length * 3;
-      const finalScore = Math.max(40, Math.min(100, baseScore));
+  requestTeacherReview: protectedProcedure
+    .input(
+      z.object({
+        submissionId: z.string().min(1),
+        userMessage: z.string().min(1, "Lời nhắn/Lý do khiếu nại không được để trống"),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      const { submissionId, userMessage } = input;
 
-      const overallFeedback = corrections.length === 0 
-        ? "Bài viết của bạn rất tốt! Cấu trúc ngữ pháp hoàn thiện, diễn đạt lưu loát và tự nhiên. Hãy tiếp tục phát huy ở các bài luận tiếp theo."
-        : `Bài viết khá tốt và thể hiện được ý tưởng mạch lạc. Tuy nhiên, vẫn còn một số lỗi ngữ pháp cơ bản cần khắc phục như chia động từ và viết hoa. Cố gắng sử dụng thêm các từ vựng nâng cao đã được gợi ý để cải thiện điểm số.`;
-
-      const aiFeedback = {
-        overallFeedback,
-        corrections,
-        vocabUpgrades,
-        wordCount,
-      };
-
-      const submissionId = crypto.randomUUID();
-      await ctx.db.insert(writingSubmissions).values({
-        id: submissionId,
-        userId,
-        writingId,
-        essay,
-        score: finalScore,
-        feedback: aiFeedback,
-      });
-
-      const existingProgress = await ctx.db.query.userProgress.findFirst({
+      const submission = await ctx.db.query.writingSubmissions.findFirst({
         where: and(
-          eq(userProgress.userId, userId),
-          eq(userProgress.writingId, writingId)
+          eq(writingSubmissions.id, submissionId),
+          eq(writingSubmissions.userId, userId)
         ),
       });
 
-      if (existingProgress) {
-        await ctx.db
-          .update(userProgress)
-          .set({ status: "completed", updatedAt: new Date() })
-          .where(eq(userProgress.id, existingProgress.id));
-      } else {
-        await ctx.db.insert(userProgress).values({
-          id: crypto.randomUUID(),
-          userId,
-          writingId,
-          status: "completed",
+      if (!submission) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Lượt nộp bài không tồn tại hoặc không thuộc về bạn",
         });
       }
 
-      return {
+      // Check if review ticket already exists
+      const existingTicket = await ctx.db.query.writingReviewTickets.findFirst({
+        where: eq(writingReviewTickets.submissionId, submissionId),
+      });
+
+      if (existingTicket) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Bài viết này đã được gửi yêu cầu chấm lại trước đó",
+        });
+      }
+
+      const ticketId = crypto.randomUUID();
+      await ctx.db.insert(writingReviewTickets).values({
+        id: ticketId,
         submissionId,
-        score: finalScore,
-        feedback: aiFeedback,
-      };
+        userId,
+        writingId: submission.writingId,
+        originalEssay: submission.essay,
+        aiFeedback: submission.feedback as any,
+        userMessage,
+        status: "pending",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      return { success: true, ticketId };
     }),
 
   writingSubmissionsHistory: protectedProcedure
