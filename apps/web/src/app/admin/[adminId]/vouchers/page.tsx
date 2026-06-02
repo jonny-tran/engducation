@@ -49,7 +49,7 @@ export default function AdminVouchersPage({ params }: PageProps) {
         toast.success(editingVoucherId ? "Cập nhật voucher thành công" : "Tạo voucher mới thành công");
         setUpsertDialogOpen(false);
         resetForm();
-        queryClient.invalidateQueries({ queryKey: trpc.adminAdvanced.voucherList.path });
+        queryClient.invalidateQueries({ queryKey: trpc.adminAdvanced.voucherList.queryOptions().queryKey });
       },
       onError: (err) => {
         toast.error(err.message || "Thao tác thất bại");
@@ -61,7 +61,7 @@ export default function AdminVouchersPage({ params }: PageProps) {
     trpc.adminAdvanced.voucherDelete.mutationOptions({
       onSuccess: () => {
         toast.success("Xóa voucher thành công");
-        queryClient.invalidateQueries({ queryKey: trpc.adminAdvanced.voucherList.path });
+        queryClient.invalidateQueries({ queryKey: trpc.adminAdvanced.voucherList.queryOptions().queryKey });
       },
       onError: (err) => {
         toast.error(err.message || "Xóa voucher thất bại");

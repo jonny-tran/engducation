@@ -3,19 +3,17 @@ import { defineConfig } from "drizzle-kit";
 import path from "path";
 import fs from "fs";
 
-const rootDir = path.resolve(__dirname, "../..");
-
-// Load in priority:
-// 1. .env.local (gitignored local overrides) at root
-// 2. .env (default fallback) at root
 const envFiles = [
-  path.join(rootDir, ".env.local"),
-  path.join(rootDir, ".env"),
+  path.normalize(path.join(__dirname, ".env.local")),
+  path.normalize(path.join(__dirname, ".env")),
+  path.normalize(path.resolve(__dirname, "../../apps/server/.env.local")),
+  path.normalize(path.resolve(__dirname, "../../apps/server/.env")),
 ];
 
 for (const file of envFiles) {
-  if (fs.existsSync(file)) {
-    dotenv.config({ path: file });
+  const normalizedFile = path.normalize(file);
+  if (fs.existsSync(normalizedFile)) {
+    dotenv.config({ path: normalizedFile });
   }
 }
 

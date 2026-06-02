@@ -52,7 +52,7 @@ export default function AdminReviewsPage({ params }: PageProps) {
         setTeacherEssay("");
         setTeacherScore(85);
         setTeacherFeedback("");
-        queryClient.invalidateQueries({ queryKey: trpc.adminAdvanced.getReviewTickets.path });
+        queryClient.invalidateQueries({ queryKey: trpc.adminAdvanced.getReviewTickets.queryOptions().queryKey });
       },
       onError: (err) => {
         toast.error(err.message || "Không thể gửi kết quả chấm");

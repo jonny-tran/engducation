@@ -4,30 +4,27 @@ import fs from "fs";
 import path from "path";
 import { z } from "zod";
 
-function findProjectRoot(startDir: string): string {
-  let dir = startDir;
-  while (dir !== path.dirname(dir)) {
-    if (fs.existsSync(path.join(/*turbopackIgnore: true*/ dir, "pnpm-workspace.yaml"))) {
-      return dir;
-    }
-    dir = path.dirname(dir);
+const cwd = /*turbopackIgnore: true*/ process.cwd();
+const possibleDirs = [
+  cwd,
+  /*turbopackIgnore: true*/ path.join(cwd, "apps/server"),
+];
+let envDir = cwd;
+for (const dir of possibleDirs) {
+  if (/*turbopackIgnore: true*/ fs.existsSync(/*turbopackIgnore: true*/ path.join(dir, ".env")) || /*turbopackIgnore: true*/ fs.existsSync(/*turbopackIgnore: true*/ path.join(dir, ".env.local"))) {
+    envDir = dir;
+    break;
   }
-  return startDir;
 }
 
-const rootDir = findProjectRoot(process.cwd());
-
-// Load in priority:
-// 1. .env.local (gitignored local overrides) at root
-// 2. .env (default fallback) at root
 const envFiles = [
-  path.join(/*turbopackIgnore: true*/ rootDir, ".env.local"),
-  path.join(/*turbopackIgnore: true*/ rootDir, ".env"),
+  /*turbopackIgnore: true*/ path.join(envDir, ".env.local"),
+  /*turbopackIgnore: true*/ path.join(envDir, ".env"),
 ];
 
 for (const file of envFiles) {
-  if (fs.existsSync(file)) {
-    dotenv.config({ path: file });
+  if (/*turbopackIgnore: true*/ fs.existsSync(file)) {
+    /*turbopackIgnore: true*/ dotenv.config({ path: /*turbopackIgnore: true*/ file });
   }
 }
 

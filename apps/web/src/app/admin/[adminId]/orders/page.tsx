@@ -27,7 +27,7 @@ export default function AdminOrdersPage({ params }: PageProps) {
   const { adminId } = use(params);
   const queryClient = useQueryClient();
 
-  const [searchStatus, setSearchStatus] = useState<string>("all");
+  const [searchStatus, setSearchStatus] = useState<string | null>("all");
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState("");
@@ -35,7 +35,7 @@ export default function AdminOrdersPage({ params }: PageProps) {
   // Queries
   const { data: ordersData, isLoading: ordersLoading } = useQuery(
     trpc.adminAdvanced.getOrders.queryOptions({
-      status: searchStatus === "all" ? undefined : searchStatus,
+      status: searchStatus && searchStatus !== "all" ? searchStatus : undefined,
     })
   );
 
@@ -43,7 +43,7 @@ export default function AdminOrdersPage({ params }: PageProps) {
     trpc.adminAdvanced.approveOrderManually.mutationOptions({
       onSuccess: () => {
         toast.success("Đã phê duyệt đơn hàng & kích hoạt quyền truy cập khóa học thành công");
-        queryClient.invalidateQueries({ queryKey: trpc.adminAdvanced.getOrders.path });
+        queryClient.invalidateQueries({ queryKey: trpc.adminAdvanced.getOrders.queryOptions().queryKey });
       },
       onError: (err) => {
         toast.error(err.message || "Phê duyệt đơn hàng thất bại");
@@ -58,7 +58,7 @@ export default function AdminOrdersPage({ params }: PageProps) {
         setRejectDialogOpen(false);
         setSelectedOrderId(null);
         setRejectReason("");
-        queryClient.invalidateQueries({ queryKey: trpc.adminAdvanced.getOrders.path });
+        queryClient.invalidateQueries({ queryKey: trpc.adminAdvanced.getOrders.queryOptions().queryKey });
       },
       onError: (err) => {
         toast.error(err.message || "Từ chối đơn hàng thất bại");

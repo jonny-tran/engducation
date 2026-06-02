@@ -70,7 +70,7 @@ export default function AdminPromptsPage({ params }: PageProps) {
         toast.success(selectedPromptId ? "Cập nhật prompt thành công" : "Tạo prompt thành công");
         setPromptDialogOpen(false);
         resetPromptForm();
-        queryClient.invalidateQueries({ queryKey: trpc.adminAdvanced.aiConfigList.path });
+        queryClient.invalidateQueries({ queryKey: trpc.adminAdvanced.aiConfigList.queryOptions().queryKey });
       },
       onError: (err) => {
         toast.error(err.message || "Thao tác thất bại");
@@ -82,7 +82,7 @@ export default function AdminPromptsPage({ params }: PageProps) {
     trpc.adminAdvanced.aiConfigDelete.mutationOptions({
       onSuccess: () => {
         toast.success("Đã xóa prompt thành công");
-        queryClient.invalidateQueries({ queryKey: trpc.adminAdvanced.aiConfigList.path });
+        queryClient.invalidateQueries({ queryKey: trpc.adminAdvanced.aiConfigList.queryOptions().queryKey });
       },
       onError: (err) => {
         toast.error(err.message || "Xóa prompt thất bại");
