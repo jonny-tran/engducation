@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import Loader from "@/components/ui/loader";
 
 const AdminModuleWorkspaceView = dynamic(
-  () => import("@/features/learning-content").then((mod) => mod.AdminModuleWorkspaceView),
+  () => import("@/features/learning-content/components/admin/admin-module-workspace-view").then((mod) => mod.AdminModuleWorkspaceView),
   {
     loading: () => <Loader />,
   }

@@ -1,4 +1,4 @@
-import { env } from "@engducation/env/web";
+import { env } from "@/env";
 import { trpcClient } from "@/utils/trpc";
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";

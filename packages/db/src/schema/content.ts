@@ -13,6 +13,7 @@ import {
 
 import { user } from "./auth";
 import { courseLevelEnum } from "./auth";
+import { aiPrompts } from "./admin";
 
 // ==========================================
 // 1. ENUMS
@@ -46,6 +47,7 @@ export const courses = pgTable("courses", {
   level: courseLevelEnum("level").notNull(),
   status: contentStatusEnum("status").default("draft").notNull(),
   price: integer("price").default(0).notNull(),
+  durationDays: integer("duration_days"), // null = lifetime
   certificateTemplateUrl: text("certificate_template_url"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
@@ -138,6 +140,8 @@ export const writingAssignments = pgTable(
     rubric: text("rubric").notNull(),
     wordLimit: integer("word_limit"),
     suggestedAnswer: text("suggested_answer"),
+    promptId: text("prompt_id").references(() => aiPrompts.id, { onDelete: "set null" }),
+    maxAiRequests: integer("max_ai_requests").default(5).notNull(),
     order: integer("order").notNull(),
     status: contentStatusEnum("status").default("draft").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
@@ -289,6 +293,10 @@ export const writingAssignmentsRelations = relations(writingAssignments, ({ one,
   }),
   submissions: many(writingSubmissions),
   progressLogs: many(userProgress),
+  aiPrompt: one(aiPrompts, {
+    fields: [writingAssignments.promptId],
+    references: [aiPrompts.id],
+  }),
 }));
 
 export const writingSubmissionsRelations = relations(writingSubmissions, ({ one }) => ({

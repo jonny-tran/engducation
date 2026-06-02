@@ -13,7 +13,6 @@
   "dependencies": {
     "@engducation/auth": "workspace:*",
     "@engducation/db": "workspace:*",
-    "@engducation/env": "workspace:*",
     "@trpc/client": "catalog:",
     "@trpc/server": "catalog:",
     "dotenv": "catalog:",

@@ -1,5 +1,5 @@
 import { StudentHeader } from "@/components/layout/student-header";
-import { StudentVocabularyView } from "@/features/vocabulary";
+import { StudentVocabularyView } from "@/features/vocabulary/components/student-vocabulary-view";
 
 export default function VocabularyPage() {
   return (

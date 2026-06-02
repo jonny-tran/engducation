@@ -1,6 +1,5 @@
 import { createDb } from "@engducation/db";
 import * as schema from "@engducation/db/schema/auth";
-import { env } from "@engducation/env/server";
 import { admin } from "better-auth/plugins";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
@@ -14,12 +13,12 @@ export function createAuth() {
 
       schema: schema,
     }),
-    trustedOrigins: [env.CORS_ORIGIN],
+    trustedOrigins: [process.env.CORS_ORIGIN || ""],
     emailAndPassword: {
       enabled: true,
     },
-    secret: env.BETTER_AUTH_SECRET,
-    baseURL: env.BETTER_AUTH_URL,
+    secret: process.env.BETTER_AUTH_SECRET,
+    baseURL: process.env.BETTER_AUTH_URL,
     advanced: {
       defaultCookieAttributes: {
         sameSite: "none",

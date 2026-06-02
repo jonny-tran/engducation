@@ -1,5 +1,5 @@
 import { StudentHeader } from "@/components/layout/student-header";
-import { StudentNotebookView } from "@/features/vocabulary";
+import { StudentNotebookView } from "@/features/vocabulary/components/student-notebook-view";
 
 export default function MyNotebookPage() {
   return (

@@ -1,4 +1,3 @@
-import { env } from "@engducation/env/server";
 import { Pool, neonConfig } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-serverless";
 import ws from "ws";
@@ -9,7 +8,7 @@ neonConfig.webSocketConstructor = ws;
 import * as schema from "./schema";
 
 export function createDb() {
-  const pool = new Pool({ connectionString: env.DATABASE_URL });
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   return drizzle(pool, { schema });
 }
 
