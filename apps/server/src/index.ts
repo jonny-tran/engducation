@@ -1,6 +1,5 @@
 import { Elysia } from "elysia";
 import { swagger } from "@elysiajs/swagger";
-import { cors } from "@elysiajs/cors";
 import { node } from "@elysiajs/node";
 import { createContext } from "@engducation/api/context";
 import { appRouter } from "@engducation/api/routers/index";
@@ -539,14 +538,6 @@ async function start() {
 
   new Elysia({ adapter: node() })
     .use(betterAuthSwaggerPlugin)
-    .use(
-      cors({
-        origin: env.CORS_ORIGIN,
-        methods: ["GET", "POST", "OPTIONS"],
-        allowedHeaders: ["Content-Type", "Authorization", "openai-ephemeral-user-id"],
-        credentials: true,
-      }),
-    )
     .use(responsePlugin())
     .all("/trpc/*", async (context) => {
       const res = await fetchRequestHandler({
