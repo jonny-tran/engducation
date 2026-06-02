@@ -7,7 +7,8 @@ import { Separator } from "@engducation/ui/components/separator";
 import { SidebarTrigger } from "@engducation/ui/components/sidebar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@engducation/ui/components/tabs";
 import { ShieldCheck } from "lucide-react";
-import { AuditLogsView, UserModerationView } from "@/features/admin-dashboard";
+import { AuditLogsView } from "@/features/admin-dashboard/components/audit-logs-view";
+import { UserModerationView } from "@/features/admin-dashboard/components/user-moderation-view";
 
 interface PageProps {
   params: Promise<{ adminId: string }>;

@@ -7,24 +7,14 @@ const possibleDirs = [
   cwd,
   /*turbopackIgnore: true*/ path.join(cwd, "apps/web"),
 ];
+
+// Find first existing .env file
 let envDir = cwd;
-for (const dir of possibleDirs) {
+outer: for (const dir of possibleDirs) {
   const checkPath = /*turbopackIgnore: true*/ path.normalize(/*turbopackIgnore: true*/ path.join(dir, ".env"));
   if (/*turbopackIgnore: true*/ fs.existsSync(checkPath)) {
     envDir = dir;
     break;
-  }
-}
-
-const envFiles = [
-  /*turbopackIgnore: true*/ path.join(envDir, ".env.local"),
-  /*turbopackIgnore: true*/ path.join(envDir, ".env"),
-];
-
-for (const file of envFiles) {
-  const normalizedFile = /*turbopackIgnore: true*/ path.normalize(/*turbopackIgnore: true*/ path.resolve(file));
-  if (/*turbopackIgnore: true*/ fs.existsSync(normalizedFile)) {
-    /*turbopackIgnore: true*/ dotenv.config({ path: /*turbopackIgnore: true*/ normalizedFile });
   }
 }
 
@@ -33,6 +23,24 @@ const rawNodeEnv = process.env.NODE_ENV || "development";
 const envMode = rawNodeEnv.toLowerCase() === "production" ? "PRODUCTION" : "DEVELOPMENT";
 
 const isProd = envMode === "PRODUCTION";
+
+// Load .env files directly — dotenv is a no-op if file doesn't exist
+const envFiles = [
+  /*turbopackIgnore: true*/ path.join(envDir, ".env.local"),
+  /*turbopackIgnore: true*/ path.join(envDir, ".env"),
+];
+
+for (const file of envFiles) {
+  try {
+    const normalizedFile = /*turbopackIgnore: true*/ path.normalize(/*turbopackIgnore: true*/ path.resolve(file));
+    const stat = /*turbopackIgnore: true*/ fs.statSync(normalizedFile);
+    if (stat.isFile()) {
+      /*turbopackIgnore: true*/ dotenv.config({ path: normalizedFile });
+    }
+  } catch {
+    // File doesn't exist — dotenv will no-op gracefully
+  }
+}
 
 if (isProd) {
   if (process.env.DATABASE_URL_PRODUCTION) {
@@ -69,5 +77,3 @@ const nextPublicApiUrlVal = envMode === "PRODUCTION" ? process.env.NEXT_PUBLIC_A
 if (nextPublicApiUrlVal !== undefined) {
   process.env.NEXT_PUBLIC_API_URL = nextPublicApiUrlVal;
 }
-
-

@@ -5,7 +5,7 @@ import { ModeToggle } from "@/components/ui/mode-toggle";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from "@engducation/ui/components/breadcrumb";
 import { Separator } from "@engducation/ui/components/separator";
 import { SidebarTrigger } from "@engducation/ui/components/sidebar";
-import { UserModerationView } from "@/features/admin-dashboard";
+import { UserModerationView } from "@/features/admin-dashboard/components/user-moderation-view";
 
 interface PageProps {
   params: Promise<{ adminId: string }>;
