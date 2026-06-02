@@ -10,8 +10,8 @@
   "dependencies": {
     "@engducation/api": "workspace:*",
     "@engducation/auth": "workspace:*",
-    "@engducation/env": "workspace:*",
     "@engducation/ui": "workspace:*",
+    "@t3-oss/env-nextjs": "^0.13.11",
     "@tanstack/react-form": "^1.28.0",
     "@tanstack/react-query": "^5.90.12",
     "@trpc/client": "catalog:",

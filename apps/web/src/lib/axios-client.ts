@@ -1,6 +1,6 @@
 // src/lib/axios-client.ts
 import axios from "axios";
-import { env } from "@engducation/env/web";
+import { env } from "@/env";
 import { toast } from "sonner";
 
 export const axiosClient = axios.create({

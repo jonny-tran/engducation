@@ -21,7 +21,6 @@
     "db:seed": "dotenv -e apps/server/.env -- turbo -F @engducation/db db:seed"
   },
   "dependencies": {
-    "@engducation/env": "workspace:*",
     "dotenv": "catalog:",
     "zod": "catalog:"
   },

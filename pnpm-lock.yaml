@@ -56,9 +56,6 @@ importers:
 
   .:
     dependencies:
-      '@engducation/env':
-        specifier: workspace:*
-        version: link:packages/env
       dotenv:
         specifier: 'catalog:'
         version: 17.4.2
@@ -99,15 +96,15 @@ importers:
       '@engducation/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@engducation/env':
-        specifier: workspace:*
-        version: link:../../packages/env
       '@hono/trpc-server':
         specifier: ^0.4.0
         version: 0.4.2(@trpc/server@11.17.0(typescript@6.0.3))(hono@4.12.18)
       '@sinclair/typebox':
         specifier: ^0.34.49
         version: 0.34.49
+      '@t3-oss/env-core':
+        specifier: ^0.13.11
+        version: 0.13.11(typescript@6.0.3)(zod@3.25.76)
       '@trpc/openapi':
         specifier: 11.16.1-canary.6
         version: 11.16.1-canary.6(@hey-api/openapi-ts@0.94.5(typescript@6.0.3))(@trpc/server@11.17.0(typescript@6.0.3))(typescript@6.0.3)(zod@3.25.76)
@@ -157,12 +154,12 @@ importers:
       '@engducation/auth':
         specifier: workspace:*
         version: link:../../packages/auth
-      '@engducation/env':
-        specifier: workspace:*
-        version: link:../../packages/env
       '@engducation/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      '@t3-oss/env-nextjs':
+        specifier: ^0.13.11
+        version: 0.13.11(typescript@6.0.3)(zod@3.25.76)
       '@tanstack/react-form':
         specifier: ^1.28.0
         version: 1.29.3(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
@@ -248,9 +245,6 @@ importers:
       '@engducation/db':
         specifier: workspace:*
         version: link:../db
-      '@engducation/env':
-        specifier: workspace:*
-        version: link:../env
       '@trpc/client':
         specifier: 'catalog:'
         version: 11.17.0(@trpc/server@11.17.0(typescript@6.0.3))(typescript@6.0.3)
@@ -285,9 +279,6 @@ importers:
       '@engducation/db':
         specifier: workspace:*
         version: link:../db
-      '@engducation/env':
-        specifier: workspace:*
-        version: link:../env
       better-auth:
         specifier: 'catalog:'
         version: 1.6.9(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@neondatabase/serverless@1.1.0)(kysely@0.28.17))(next@16.2.6(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
@@ -312,9 +303,6 @@ importers:
       '@better-auth/utils':
         specifier: 'catalog:'
         version: 0.4.0
-      '@engducation/env':
-        specifier: workspace:*
-        version: link:../env
       '@neondatabase/serverless':
         specifier: ^1.0.2
         version: 1.1.0
@@ -343,31 +331,6 @@ importers:
       tsx:
         specifier: ^4.21.0
         version: 4.21.0
-      typescript:
-        specifier: 'catalog:'
-        version: 6.0.3
-
-  packages/env:
-    dependencies:
-      '@t3-oss/env-core':
-        specifier: ^0.13.1
-        version: 0.13.11(typescript@6.0.3)(zod@3.25.76)
-      '@t3-oss/env-nextjs':
-        specifier: ^0.13.1
-        version: 0.13.11(typescript@6.0.3)(zod@3.25.76)
-      dotenv:
-        specifier: 'catalog:'
-        version: 17.4.2
-      zod:
-        specifier: 'catalog:'
-        version: 3.25.76
-    devDependencies:
-      '@engducation/config':
-        specifier: workspace:*
-        version: link:../config
-      '@types/node':
-        specifier: ^22.13.14
-        version: 22.19.18
       typescript:
         specifier: 'catalog:'
         version: 6.0.3

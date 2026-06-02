@@ -1,5 +1,5 @@
 import type { AppRouter } from "@engducation/api/routers/index";
-import { env } from "@engducation/env/web";
+import { env } from "@/env";
 import { QueryCache, QueryClient } from "@tanstack/react-query";
 import {
   createTRPCClient,

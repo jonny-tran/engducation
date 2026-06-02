@@ -17,19 +17,6 @@ for (const file of envFiles) {
   }
 }
 
-// Map DATABASE_URL dynamically based on NODE_ENV
-const rawNodeEnv = process.env.NODE_ENV || "development";
-const isProd = rawNodeEnv.toLowerCase() === "production";
-
-if (isProd) {
-  if (process.env.DATABASE_URL_PRODUCTION) {
-    process.env.DATABASE_URL = process.env.DATABASE_URL_PRODUCTION;
-  }
-} else {
-  if (process.env.DATABASE_URL_DEVELOPMENT && !process.env.DATABASE_URL) {
-    process.env.DATABASE_URL = process.env.DATABASE_URL_DEVELOPMENT;
-  }
-}
 
 export default defineConfig({
   schema: "./src/schema",

@@ -6,7 +6,7 @@ import { createContext } from "@engducation/api/context";
 import { appRouter } from "@engducation/api/routers/index";
 import { responsePlugin } from "@engducation/api";
 import { auth } from "@engducation/auth";
-import { env } from "@engducation/env/server";
+import { env } from "./env";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { createBetterAuthRoutes } from "./plugins";
 

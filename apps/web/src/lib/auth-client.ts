@@ -1,4 +1,4 @@
-import { env } from "@engducation/env/web";
+import { env } from "@/env";
 import { createAuthClient } from "better-auth/react";
 import { adminClient } from "better-auth/client/plugins";
 

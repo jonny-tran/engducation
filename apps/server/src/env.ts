@@ -28,38 +28,6 @@ for (const file of envFiles) {
   }
 }
 
-// Map variables dynamically based on NODE_ENV
-const rawNodeEnv = process.env.NODE_ENV || "development";
-const isProd = rawNodeEnv.toLowerCase() === "production";
-
-// For DATABASE_URL: development uses DATABASE_URL normally, production uses DATABASE_URL_PRODUCTION
-if (isProd) {
-  if (process.env.DATABASE_URL_PRODUCTION) {
-    process.env.DATABASE_URL = process.env.DATABASE_URL_PRODUCTION;
-  }
-} else {
-  if (process.env.DATABASE_URL_DEVELOPMENT && !process.env.DATABASE_URL) {
-    process.env.DATABASE_URL = process.env.DATABASE_URL_DEVELOPMENT;
-  }
-}
-
-// Map other variables dynamically based on NODE_ENV
-const envMode = isProd ? "PRODUCTION" : "DEVELOPMENT";
-const envKeysToMap = [
-  "CORS_ORIGIN",
-  "PUBLIC_URL",
-  "BETTER_AUTH_URL",
-  "DEV_PASS",
-  "NEXT_PUBLIC_API_URL",
-];
-
-for (const key of envKeysToMap) {
-  const envVal = process.env[`${key}_${envMode}`];
-  if (envVal !== undefined) {
-    process.env[key] = envVal;
-  }
-}
-
 export const env = createEnv({
   server: {
     DATABASE_URL: z.string().min(1),
@@ -80,5 +48,3 @@ export const env = createEnv({
   emptyStringAsUndefined: true,
   skipValidation: !!process.env.SKIP_ENV_VALIDATION,
 });
-
-

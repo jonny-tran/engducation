@@ -1,5 +1,4 @@
-import "./env-loader";
-import "@engducation/env/web";
+import "./src/env";
 import type { NextConfig } from "next";
 import path from "path";
 
